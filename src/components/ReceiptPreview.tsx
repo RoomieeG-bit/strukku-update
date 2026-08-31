@@ -8,6 +8,7 @@ import { Receipt } from '../types';
 import { formatCurrency, formatDateTime } from '../utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   Printer, 
   Download, 
@@ -15,7 +16,8 @@ import {
   Sparkles, 
   Check, 
   Copy,
-  Info
+  Info,
+  QrCode
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -403,27 +405,69 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
     window.print();
   };
 
-  // Mock Barcode generation (standard lines of varying widths)
-  const renderBarcode = () => {
+  // Barcode & QR Code Generator for Receipt Footer
+  const renderBarcodeAndQr = () => {
+    const displayType = receipt.codeDisplayType || 'BOTH';
+    if (displayType === 'NONE') return null;
+
+    const defaultQrValue = receipt.storeWebsite 
+      ? (receipt.storeWebsite.startsWith('http') ? receipt.storeWebsite : `https://${receipt.storeWebsite}`) 
+      : `STRUK ID: ${receipt.transactionId}\nTOKO: ${receipt.storeName}\nTANGGAL: ${receipt.dateTime}\nTOTAL: ${formatCurrency(receipt.total, currencySymbol)}\nSTATUS: ${receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus}`;
+
+    const effectiveQrValue = (receipt.qrValue && receipt.qrValue.trim()) ? receipt.qrValue.trim() : defaultQrValue;
+    const qrSize = receipt.qrSize || 90;
+    const qrLabel = receipt.qrLabel !== undefined ? receipt.qrLabel : 'Scan untuk cek keaslian struk';
+    const barcodeNumber = receipt.barcodeValue || receipt.transactionId.split('/')[0];
+    const showBarcodeNumber = receipt.showBarcodeNumber !== false;
+
+    // Standard simulated realistic barcode bars
     const bars = [1, 3, 1, 2, 4, 1, 3, 2, 1, 4, 2, 1, 3, 1, 2, 4, 1, 2, 3, 1, 4, 1];
+
     return (
-      <div className="flex flex-col items-center mt-5 mb-2">
-        <div className="flex items-end justify-center h-8 bg-transparent w-48 mb-1">
-          {bars.map((weight, idx) => (
-            <div 
-              key={idx} 
-              className="bg-black h-full" 
-              style={{ 
-                width: `${weight * 2}px`, 
-                marginRight: idx % 2 === 0 ? '2px' : '0px',
-                backgroundColor: idx % 3 === 0 ? '#000000' : idx % 3 === 1 ? '#000000' : 'transparent' 
-              }} 
-            />
-          ))}
-        </div>
-        <span className="text-[9px] font-mono tracking-widest text-slate-500 uppercase">
-          *{receipt.transactionId.split('/')[0]}*
-        </span>
+      <div className="flex flex-col items-center mt-5 mb-2 gap-3 select-none" id="receipt-code-section">
+        {/* QR Code section */}
+        {(displayType === 'QR' || displayType === 'BOTH') && (
+          <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-slate-200 shadow-2xs">
+            <div className="bg-white p-1 flex justify-center">
+              <QRCodeSVG 
+                value={effectiveQrValue}
+                size={qrSize}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
+            </div>
+            {qrLabel && (
+              <span className="text-[8px] font-sans font-medium text-slate-500 mt-1 max-w-[200px] text-center leading-tight">
+                {qrLabel}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Barcode section */}
+        {(displayType === 'BARCODE' || displayType === 'BOTH') && (
+          <div className="flex flex-col items-center">
+            <div className="flex items-end justify-center h-8 bg-transparent w-48 mb-1">
+              {bars.map((weight, idx) => (
+                <div 
+                  key={idx} 
+                  className="bg-black h-full" 
+                  style={{ 
+                    width: `${weight * 2}px`, 
+                    marginRight: idx % 2 === 0 ? '2px' : '0px',
+                    backgroundColor: idx % 3 === 0 ? '#000000' : idx % 3 === 1 ? '#000000' : 'transparent' 
+                  }} 
+                />
+              ))}
+            </div>
+            {showBarcodeNumber && (
+              <span className="text-[9px] font-mono tracking-widest text-slate-600 uppercase font-semibold">
+                *{barcodeNumber}*
+              </span>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -785,8 +829,8 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
             )}
           </div>
 
-          {/* Barcode & Extra Slogan */}
-          {renderBarcode()}
+          {/* Barcode & QR Code Section */}
+          {renderBarcodeAndQr()}
 
           {/* Slogan / Thank you Footer */}
           {receipt.notesFooter && (

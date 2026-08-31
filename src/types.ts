@@ -5,6 +5,7 @@
 
 export type PaymentMethod = 'CASH' | 'DEBIT' | 'CREDIT' | 'QRIS' | 'E-WALLET';
 export type PaymentStatus = 'SUDAH_LUNAS' | 'BELUM_LUNAS' | 'HUTANG';
+export type CodeDisplayType = 'QR' | 'BARCODE' | 'BOTH' | 'NONE';
 
 export interface Item {
   id: string;
@@ -39,6 +40,12 @@ export interface Receipt {
   notesFooter: string;
   logoUrl?: string; // custom base64 or URL
   logoType?: 'NONE' | 'INDOMARET' | 'ALFAMART' | 'OSAVE' | 'CUSTOM';
+  codeDisplayType?: CodeDisplayType;
+  qrValue?: string;
+  qrLabel?: string;
+  qrSize?: number;
+  barcodeValue?: string;
+  showBarcodeNumber?: boolean;
 }
 
 export interface StoreProfile {
@@ -56,4 +63,10 @@ export interface StoreProfile {
   paymentStatus: PaymentStatus;
   logoUrl?: string;
   logoType?: 'NONE' | 'INDOMARET' | 'ALFAMART' | 'OSAVE' | 'CUSTOM';
+  codeDisplayType?: CodeDisplayType;
+  qrValue?: string;
+  qrLabel?: string;
+  qrSize?: number;
+  barcodeValue?: string;
+  showBarcodeNumber?: boolean;
 }

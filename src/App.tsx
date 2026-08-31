@@ -91,6 +91,12 @@ export default function App() {
       changeAmount: 50000 - total,
       notesHeader: 'PT. SENJA ABADI INTERNASIONAL',
       notesFooter: 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nWiFi: senjagratis / pwd: kopi\nLAYANAN PELANGGAN: 0812-XXXX-XXXX',
+      codeDisplayType: 'BOTH',
+      qrValue: 'https://www.kopisenjaabadi.com/struk/verify',
+      qrLabel: 'Scan untuk verifikasi struk asli',
+      qrSize: 90,
+      barcodeValue: '',
+      showBarcodeNumber: true,
     };
   });
 

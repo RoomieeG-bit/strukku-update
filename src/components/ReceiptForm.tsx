@@ -4,8 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod, PaymentStatus } from '../types';
-import { generateTransactionId, calculateTotals } from '../utils';
+import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType } from '../types';
+import { generateTransactionId, calculateTotals, formatCurrency } from '../utils';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   Store, 
   User, 
@@ -22,7 +23,20 @@ import {
   Sparkles,
   Layers,
   PlusCircle,
-  CheckCircle
+  CheckCircle,
+  QrCode,
+  Link as LinkIcon,
+  Globe,
+  Phone,
+  ExternalLink,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Sliders,
+  Barcode,
+  CreditCard
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -155,7 +169,8 @@ export default function ReceiptForm({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemDiscount, setNewItemDiscount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'templates'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'code' | 'templates'>('store');
+  const [copiedQrContent, setCopiedQrContent] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [presetSuccessMsg, setPresetSuccessMsg] = useState('');
   const [customPresets, setCustomPresets] = useState<any[]>(() => {
@@ -342,32 +357,34 @@ export default function ReceiptForm({
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full" id="receipt-form-panel">
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-100 bg-slate-50/70 p-2 gap-1 shrink-0">
+      <div className="flex border-b border-slate-100 bg-slate-50/70 p-2 gap-1 shrink-0 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('store')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
             activeTab === 'store'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
           }`}
           id="tab-store-info"
         >
-          <Store className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Toko & Detail</span>
+          <Store className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden md:inline">Toko & Detail</span>
+          <span className="md:hidden">Toko</span>
         </button>
         <button
           onClick={() => setActiveTab('items')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
             activeTab === 'items'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
           }`}
           id="tab-items"
         >
-          <ShoppingBag className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Daftar Barang</span>
+          <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden md:inline">Daftar Barang</span>
+          <span className="md:hidden">Barang</span>
           {receipt.items.length > 0 && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeTab === 'items' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-850'
             }`}>
               {receipt.items.length}
@@ -376,27 +393,40 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('payment')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
             activeTab === 'payment'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
           }`}
           id="tab-payment"
         >
-          <Percent className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Pembayaran & Pajak</span>
+          <Percent className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden md:inline">Pembayaran & Pajak</span>
+          <span className="md:hidden">Bayar</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('code')}
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+            activeTab === 'code'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+          }`}
+          id="tab-barcode-qr"
+        >
+          <QrCode className="w-3.5 h-3.5 shrink-0" />
+          <span>Barcode dan QR</span>
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
             activeTab === 'templates'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
           }`}
           id="tab-presets"
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Preset</span>
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span>Preset</span>
         </button>
       </div>
 
@@ -1074,7 +1104,401 @@ export default function ReceiptForm({
           </div>
         )}
 
-        {/* TAB 4: MOCK RETAIL TEMPLATES */}
+        {/* TAB 4: BARCODE & QR CODE GENERATOR */}
+        {activeTab === 'code' && (
+          <div className="space-y-6" id="form-section-barcode-qr">
+            {/* Intro banner */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl flex items-start gap-3">
+              <div className="p-2 bg-slate-900 text-white rounded-lg shrink-0 mt-0.5">
+                <QrCode className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Generator Barcode & QR Code Footer</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                  Tambahkan QR Code dan Barcode di bagian bawah struk untuk membuat struk terlihat lebih profesional. QR Code dapat langsung discan dengan kamera smartphone untuk melihat URL toko, membuka tautan verifikasi, atau membaca detail transaksi unik.
+                </p>
+              </div>
+            </div>
+
+            {/* Display Type Mode Selection */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Format Tampilan Footer
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: 'BOTH', label: 'Barcode & QR', desc: 'Lengkap (Rekomendasi)', icon: Sparkles },
+                  { id: 'QR', label: 'QR Code Saja', desc: 'Scan Interaktif', icon: QrCode },
+                  { id: 'BARCODE', label: 'Barcode Saja', desc: 'Gaya Retail Tradisional', icon: Barcode },
+                  { id: 'NONE', label: 'Sembunyikan', desc: 'Tanpa Kode', icon: EyeOff },
+                ].map((mode) => {
+                  const IconComp = mode.icon;
+                  const isSelected = (receipt.codeDisplayType || 'BOTH') === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => handleRecalculate({ codeDisplayType: mode.id as CodeDisplayType })}
+                      className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        isSelected
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <IconComp className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-slate-500'}`} />
+                        {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold">{mode.label}</div>
+                        <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                          {mode.desc}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* QR Code Configuration Section */}
+            {(receipt.codeDisplayType || 'BOTH') !== 'BARCODE' && (receipt.codeDisplayType || 'BOTH') !== 'NONE' && (
+              <div className="bg-white p-4.5 border border-slate-200 rounded-xl space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-slate-900" />
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Pengaturan QR Code</h4>
+                  </div>
+                  <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
+                    Dapat Discan
+                  </span>
+                </div>
+
+                {/* Quick Presets for QR Content */}
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    Pilihan Isi Cepat Konten QR:
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txData = `STRUK ID: ${receipt.transactionId}\nTOKO: ${receipt.storeName || 'TOKO'}\nTGL: ${receipt.dateTime}\nTOTAL: ${formatCurrency(receipt.total, currencySymbol)}\nSTATUS: ${receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus}`;
+                        handleRecalculate({ 
+                          qrValue: txData,
+                          qrLabel: 'Scan untuk verifikasi struk asli'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">Detail Transaksi Unik</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const siteUrl = receipt.storeWebsite 
+                          ? (receipt.storeWebsite.startsWith('http') ? receipt.storeWebsite : `https://${receipt.storeWebsite}`) 
+                          : 'https://www.tokoonline.com';
+                        handleRecalculate({ 
+                          qrValue: siteUrl,
+                          qrLabel: 'Scan untuk kunjungi website kami'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">URL Website Toko</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const verifyUrl = `https://strukku.app/verify/${encodeURIComponent(receipt.transactionId.replace(/\s+/g, ''))}`;
+                        handleRecalculate({ 
+                          qrValue: verifyUrl,
+                          qrLabel: 'Scan untuk verifikasi keaslian'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">Tautan Cek Struk</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleanPhone = (receipt.storePhone || '628123456789').replace(/[^0-9]/g, '');
+                        const waUrl = `https://wa.me/${cleanPhone}?text=Halo%20${encodeURIComponent(receipt.storeName || 'Admin')}%2C%20saya%20ingin%20bertanya%20mengenai%20transaksi%20${encodeURIComponent(receipt.transactionId)}`;
+                        handleRecalculate({ 
+                          qrValue: waUrl,
+                          qrLabel: 'Scan untuk chat CS WhatsApp'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">WhatsApp CS Toko</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const qrisData = `00020101021126580014ID.LINKAJA.WWW011893600999${receipt.transactionId.replace(/[^0-9]/g, '').padEnd(12, '0')}520458125303360540${receipt.total.toString().padStart(6, '0')}5802ID5912${(receipt.storeName || 'STRUKKU POS').slice(0, 20)}6007JAKARTA6304`;
+                        handleRecalculate({ 
+                          qrValue: qrisData,
+                          qrLabel: 'Scan untuk pembayaran QRIS'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">QRIS / Pembayaran</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleRecalculate({ 
+                          qrValue: '',
+                          qrLabel: 'Scan untuk info detail'
+                        });
+                      }}
+                      className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-left text-[11px] transition text-slate-750 font-medium hover:text-slate-950 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span className="truncate">Reset ke Default</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* QR Code Text/URL Content Input */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                      Konten / URL yang Dikodekan
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {(receipt.qrValue || '').length} Karakter
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={receipt.qrValue || ''}
+                    onChange={(e) => handleRecalculate({ qrValue: e.target.value })}
+                    placeholder={`Default: URL Website Toko atau Detail Transaksi ID ${receipt.transactionId}`}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50/50 font-mono focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none resize-y"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <span>Masukkan link website (https://...), detail invoice, atau teks kustom lainnya.</span>
+                    {receipt.qrValue && receipt.qrValue.startsWith('http') && (
+                      <a
+                        href={receipt.qrValue}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-slate-900 font-semibold hover:underline inline-flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Buka URL
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {/* QR Code Caption / Label */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                    Teks Keterangan di Bawah QR Code (Footer Struk)
+                  </label>
+                  <input
+                    type="text"
+                    value={receipt.qrLabel !== undefined ? receipt.qrLabel : 'Scan untuk cek keaslian struk'}
+                    onChange={(e) => handleRecalculate({ qrLabel: e.target.value })}
+                    placeholder="Contoh: Scan untuk verifikasi struk asli"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                  />
+
+                  {/* Suggestion Chips */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      'Scan untuk verifikasi struk asli',
+                      'Scan untuk info promo & katalog',
+                      'Scan untuk klaim garansi',
+                      'Scan untuk kuesioner & hadiah',
+                      '',
+                    ].map((labelOption, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleRecalculate({ qrLabel: labelOption })}
+                        className={`text-[10px] px-2 py-1 rounded-md border transition cursor-pointer ${
+                          receipt.qrLabel === labelOption
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {labelOption === '' ? '🚫 Kosongkan Label' : labelOption}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* QR Code Size Selector */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                    Ukuran QR Code pada Struk
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { size: 75, label: 'Kecil (75px)' },
+                      { size: 90, label: 'Standar (90px)' },
+                      { size: 110, label: 'Besar (110px)' },
+                    ].map((sz) => (
+                      <button
+                        key={sz.size}
+                        type="button"
+                        onClick={() => handleRecalculate({ qrSize: sz.size })}
+                        className={`py-2 px-3 rounded-lg text-xs font-semibold border transition text-center cursor-pointer ${
+                          (receipt.qrSize || 90) === sz.size
+                            ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {sz.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Barcode Configuration Section */}
+            {(receipt.codeDisplayType || 'BOTH') !== 'QR' && (receipt.codeDisplayType || 'BOTH') !== 'NONE' && (
+              <div className="bg-white p-4.5 border border-slate-200 rounded-xl space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Barcode className="w-4 h-4 text-slate-900" />
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Pengaturan Barcode</h4>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                    Nilai / Nomor Barcode
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={receipt.barcodeValue || ''}
+                      onChange={(e) => handleRecalculate({ barcodeValue: e.target.value })}
+                      placeholder={`Otomatis: ${receipt.transactionId.split('/')[0]}`}
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white font-mono focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRecalculate({ barcodeValue: receipt.transactionId.split('/')[0] })}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer whitespace-nowrap"
+                    >
+                      Pakai No. Transaksi
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Kosongkan jika ingin barcode otomatis mengikuti Nomor ID Transaksi.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <div className="text-xs font-bold text-slate-700">Tampilkan Nomor di Bawah Garis Barcode</div>
+                    <div className="text-[11px] text-slate-400">Menampilkan teks *NOMOR-BARCODE* di bawah strip kode batang.</div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={receipt.showBarcodeNumber !== false}
+                      onChange={(e) => handleRecalculate({ showBarcodeNumber: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-900"></div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Live Interactive Scanner Test Card */}
+            {(receipt.codeDisplayType || 'BOTH') !== 'NONE' && (
+              <div className="bg-slate-900 text-white p-4.5 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                      Uji Langsung Hasil Scan
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    Siap Discan Kamera
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-lg p-3 text-slate-900 flex flex-col sm:flex-row items-center gap-4">
+                  {((receipt.codeDisplayType || 'BOTH') === 'QR' || (receipt.codeDisplayType || 'BOTH') === 'BOTH') && (
+                    <div className="p-2 bg-white rounded-lg border border-slate-200 shrink-0 flex flex-col items-center">
+                      <QRCodeSVG
+                        value={
+                          (receipt.qrValue && receipt.qrValue.trim())
+                            ? receipt.qrValue.trim()
+                            : (receipt.storeWebsite 
+                                ? (receipt.storeWebsite.startsWith('http') ? receipt.storeWebsite : `https://${receipt.storeWebsite}`) 
+                                : `STRUK ID: ${receipt.transactionId}\nTOKO: ${receipt.storeName}\nTOTAL: ${formatCurrency(receipt.total, currencySymbol)}`)
+                        }
+                        size={84}
+                        level="M"
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                      />
+                      <span className="text-[8px] font-medium text-slate-500 mt-1">
+                        Arahkan Kamera HP ke Sini
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0 space-y-1.5 w-full">
+                    <div className="text-xs font-bold text-slate-800">Konten Terenkripsi QR:</div>
+                    <div className="bg-slate-50 p-2 rounded border border-slate-200 font-mono text-[10px] text-slate-700 break-all max-h-20 overflow-y-auto">
+                      {(receipt.qrValue && receipt.qrValue.trim())
+                        ? receipt.qrValue.trim()
+                        : (receipt.storeWebsite 
+                            ? (receipt.storeWebsite.startsWith('http') ? receipt.storeWebsite : `https://${receipt.storeWebsite}`) 
+                            : `STRUK ID: ${receipt.transactionId}\nTOKO: ${receipt.storeName}\nTGL: ${receipt.dateTime}\nTOTAL: ${formatCurrency(receipt.total, currencySymbol)}`)}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const content = (receipt.qrValue && receipt.qrValue.trim())
+                            ? receipt.qrValue.trim()
+                            : (receipt.storeWebsite 
+                                ? (receipt.storeWebsite.startsWith('http') ? receipt.storeWebsite : `https://${receipt.storeWebsite}`) 
+                                : `STRUK ID: ${receipt.transactionId}\nTOKO: ${receipt.storeName}\nTGL: ${receipt.dateTime}\nTOTAL: ${formatCurrency(receipt.total, currencySymbol)}`);
+                          navigator.clipboard.writeText(content);
+                          setCopiedQrContent(true);
+                          setTimeout(() => setCopiedQrContent(false), 2000);
+                        }}
+                        className="px-2.5 py-1 bg-slate-900 hover:bg-slate-950 text-white rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        {copiedQrContent ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedQrContent ? 'Tersalin!' : 'Salin Konten QR'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: MOCK RETAIL TEMPLATES */}
         {activeTab === 'templates' && (
           <div className="space-y-6" id="form-section-presets">
             {/* Create Custom Preset Card */}
