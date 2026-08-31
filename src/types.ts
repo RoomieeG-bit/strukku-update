@@ -1,0 +1,59 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export type PaymentMethod = 'CASH' | 'DEBIT' | 'CREDIT' | 'QRIS' | 'E-WALLET';
+export type PaymentStatus = 'SUDAH_LUNAS' | 'BELUM_LUNAS' | 'HUTANG';
+
+export interface Item {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number; // Unit price
+  discountRate?: number; // item-level percentage-based discount, e.g. 10 for 10%
+}
+
+export interface Receipt {
+  id: string;
+  storeName: string;
+  storeAddress: string;
+  storePhone: string;
+  storeWebsite: string;
+  cashierName: string;
+  transactionId: string;
+  dateTime: string;
+  items: Item[];
+  taxRate: number; // percentage
+  taxAmount: number;
+  discountRate: number; // percentage or fixed value
+  discountType: 'PERCENT' | 'FIXED';
+  discountAmount: number; // calculated total discount
+  subtotal: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  cashReceived: number;
+  changeAmount: number;
+  notesHeader: string;
+  notesFooter: string;
+  logoUrl?: string; // custom base64 or URL
+  logoType?: 'NONE' | 'INDOMARET' | 'ALFAMART' | 'OSAVE' | 'CUSTOM';
+}
+
+export interface StoreProfile {
+  storeName: string;
+  storeAddress: string;
+  storePhone: string;
+  storeWebsite: string;
+  cashierName: string;
+  taxRate: number;
+  discountRate: number;
+  discountType: 'PERCENT' | 'FIXED';
+  notesHeader: string;
+  notesFooter: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  logoUrl?: string;
+  logoType?: 'NONE' | 'INDOMARET' | 'ALFAMART' | 'OSAVE' | 'CUSTOM';
+}
