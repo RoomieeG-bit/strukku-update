@@ -4,8 +4,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset } from '../types';
-import { formatCurrency, formatDateTime, RECEIPT_FONTS, getFontFamilyCss, PAPER_SIZE_OPTIONS, getPaperWidthMm } from '../utils';
+import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset, CustomLabel } from '../types';
+import { formatCurrency, formatDateTime, RECEIPT_FONTS, getFontFamilyCss, PAPER_SIZE_OPTIONS, getPaperWidthMm, getReceiptLabels } from '../utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
@@ -416,6 +416,24 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
   const [exporting, setExporting] = useState<string | null>(null);
   const [copiedTx, setCopiedTx] = useState(false);
   const [showCustomSizeModal, setShowCustomSizeModal] = useState(false);
+
+  const labels = getReceiptLabels(receipt.labels);
+
+  const headerCustomLabels = (receipt.customLabels || []).filter(l => l.position === 'HEADER' && (l.label || l.value));
+  const metaCustomLabels = (receipt.customLabels || []).filter(l => l.position === 'META' && (l.label || l.value));
+  const itemsSummaryCustomLabels = (receipt.customLabels || []).filter(l => l.position === 'ITEMS_SUMMARY' && (l.label || l.value));
+  const paymentCustomLabels = (receipt.customLabels || []).filter(l => l.position === 'PAYMENT' && (l.label || l.value));
+  const footerCustomLabels = (receipt.customLabels || []).filter(l => l.position === 'FOOTER' && (l.label || l.value));
+
+  const renderCustomLabelItem = (item: CustomLabel) => {
+    const showColon = item.showColon !== false;
+    return (
+      <div key={item.id} className={`flex justify-between items-start gap-2 ${item.isBold ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+        <span className="shrink-0">{item.label}{showColon ? ':' : ''}</span>
+        <span className="text-right break-words">{item.value}</span>
+      </div>
+    );
+  };
 
   const activePaperWidthMm = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
   // Convert mm to screen preview pixel max-width (~250px for 58mm, ~350px for 80mm, ~435px for 100mm)
@@ -1079,13 +1097,20 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             {receipt.storeWebsite && <div className="lowercase">{receipt.storeWebsite}</div>}
           </div>
 
+          {/* Header Custom Labels */}
+          {headerCustomLabels.length > 0 && (
+            <div className="text-slate-700 text-[10px] space-y-1 pt-1.5 border-t border-dotted border-slate-300 mt-2 px-1">
+              {headerCustomLabels.map(renderCustomLabelItem)}
+            </div>
+          )}
+
           {/* Top Divider */}
           <div className="border-t border-dashed border-slate-400 my-4" />
 
           {/* Receipt Meta Details */}
           <div className="space-y-1 text-slate-700 text-[10px]">
             <div className="flex justify-between">
-              <span>No. Bon:</span>
+              <span>{labels.transactionIdLabel}</span>
               <div className="flex items-center gap-1 relative">
                 <span className="font-bold">{receipt.transactionId}</span>
                 <button 
@@ -1110,19 +1135,21 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               </div>
             </div>
             <div className="flex justify-between">
-              <span>Tanggal:</span>
+              <span>{labels.dateTimeLabel}</span>
               <span>{formatDateTime(receipt.dateTime)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Kasir:</span>
+              <span>{labels.cashierLabel}</span>
               <span>{receipt.cashierName || 'Kasir Default'}</span>
             </div>
             {receipt.customerName && (
               <div className="flex justify-between">
-                <span>Pelanggan:</span>
+                <span>{labels.customerLabel}</span>
                 <span className="font-semibold">{receipt.customerName}</span>
               </div>
             )}
+            {/* Meta Custom Labels */}
+            {metaCustomLabels.map(renderCustomLabelItem)}
           </div>
 
           {/* Middle Divider */}
@@ -1159,13 +1186,20 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             )}
           </div>
 
+          {/* Items Summary Custom Labels */}
+          {itemsSummaryCustomLabels.length > 0 && (
+            <div className="space-y-1 my-2 bg-slate-50/70 p-2 rounded border border-dotted border-slate-300 text-[10px]">
+              {itemsSummaryCustomLabels.map(renderCustomLabelItem)}
+            </div>
+          )}
+
           {/* Bottom Middle Divider */}
           <div className="border-t border-dashed border-slate-400 my-4" />
 
           {/* Calculations Table */}
           <div className="space-y-1.5 text-slate-800">
             <div className="flex justify-between">
-              <span>SUBTOTAL:</span>
+              <span>{labels.subtotalLabel}</span>
               <span>{formatCurrency(receipt.subtotal, currencySymbol)}</span>
             </div>
 
@@ -1176,7 +1210,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                 {receipt.items.some(i => i.discountRate && i.discountRate > 0) ? (
                   <div className="space-y-1 my-1 bg-slate-50 p-2 rounded-lg border border-dotted border-slate-200">
                     <div className="flex justify-between text-slate-700 text-xs">
-                      <span>DISKON BARANG:</span>
+                      <span>{labels.itemDiscountLabel}</span>
                       <span>-{formatCurrency(receipt.items.reduce((sum, item) => sum + Math.round((item.price * item.quantity) * ((item.discountRate || 0) / 100)), 0), currencySymbol)}</span>
                     </div>
                     {(() => {
@@ -1185,7 +1219,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                       if (txDiscount > 0) {
                         return (
                           <div className="flex justify-between text-slate-700 text-xs">
-                            <span>DISKON UTAMA {receipt.discountType === 'PERCENT' ? `(${receipt.discountRate}%)` : ''}:</span>
+                            <span>{labels.discountLabel} UTAMA {receipt.discountType === 'PERCENT' ? `(${receipt.discountRate}%)` : ''}:</span>
                             <span>-{formatCurrency(txDiscount, currencySymbol)}</span>
                           </div>
                         );
@@ -1200,7 +1234,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                 ) : (
                   <div className="flex justify-between text-slate-800 font-bold">
                     <span>
-                      DISKON {receipt.discountType === 'PERCENT' ? `(${receipt.discountRate}%)` : ''}:
+                      {labels.discountLabel} {receipt.discountType === 'PERCENT' ? `(${receipt.discountRate}%)` : ''}:
                     </span>
                     <span>-{formatCurrency(receipt.discountAmount, currencySymbol)}</span>
                   </div>
@@ -1211,13 +1245,13 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             {/* Tax */}
             {receipt.taxAmount > 0 && (
               <div className="flex justify-between">
-                <span>PAJAK / PPN ({receipt.taxRate}%):</span>
+                <span>{labels.taxLabel} ({receipt.taxRate}%):</span>
                 <span>{formatCurrency(receipt.taxAmount, currencySymbol)}</span>
               </div>
             )}
 
             <div className="flex justify-between text-base font-extrabold border-t border-slate-200 pt-1.5 text-slate-950">
-              <span>TOTAL AKHIR:</span>
+              <span>{labels.totalLabel}</span>
               <span>{formatCurrency(receipt.total, currencySymbol)}</span>
             </div>
           </div>
@@ -1228,12 +1262,12 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           {/* Payment Method / Cash details */}
           <div className="space-y-1.5 text-slate-800">
             <div className="flex justify-between font-bold">
-              <span>METODE BAYAR:</span>
+              <span>{labels.paymentMethodLabel}</span>
               <span className="uppercase">{receipt.paymentMethod}</span>
             </div>
 
             <div className="flex justify-between font-bold">
-              <span>STATUS PELUNASAN:</span>
+              <span>{labels.paymentStatusLabel}</span>
               <span className={`uppercase font-extrabold ${
                 receipt.paymentStatus === 'SUDAH_LUNAS' 
                   ? 'text-green-800' 
@@ -1248,19 +1282,29 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             {receipt.paymentMethod === 'CASH' && (
               <>
                 <div className="flex justify-between">
-                  <span>BAYAR TUNAI:</span>
+                  <span>{labels.cashReceivedLabel}</span>
                   <span>{formatCurrency(receipt.cashReceived, currencySymbol)}</span>
                 </div>
                 <div className="flex justify-between font-extrabold text-slate-950 border-t border-slate-200 pt-1">
-                  <span>KEMBALIAN:</span>
+                  <span>{labels.changeAmountLabel}</span>
                   <span>{formatCurrency(receipt.changeAmount, currencySymbol)}</span>
                 </div>
               </>
             )}
+
+            {/* Payment Custom Labels */}
+            {paymentCustomLabels.map(renderCustomLabelItem)}
           </div>
 
           {/* Barcode & QR Code Section */}
           {renderBarcodeAndQr()}
+
+          {/* Footer Custom Labels */}
+          {footerCustomLabels.length > 0 && (
+            <div className="space-y-1 my-2.5 pt-2 border-t border-dotted border-slate-300 text-slate-700 text-[10px]">
+              {footerCustomLabels.map(renderCustomLabelItem)}
+            </div>
+          )}
 
           {/* Slogan / Thank you Footer */}
           {receipt.notesFooter && (

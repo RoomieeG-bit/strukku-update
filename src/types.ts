@@ -19,6 +19,33 @@ export type ReceiptFontFamily =
 
 export type ReceiptPaperSizePreset = '58mm' | '80mm' | '76mm' | '100mm' | 'CUSTOM';
 
+export type CustomLabelPosition = 'HEADER' | 'META' | 'ITEMS_SUMMARY' | 'PAYMENT' | 'FOOTER';
+
+export interface CustomLabel {
+  id: string;
+  label: string;
+  value: string;
+  position: CustomLabelPosition;
+  isBold?: boolean;
+  showColon?: boolean;
+}
+
+export interface ReceiptLabels {
+  transactionIdLabel?: string; // Default: "No. Bon:"
+  dateTimeLabel?: string;       // Default: "Tanggal:"
+  cashierLabel?: string;        // Default: "Kasir:"
+  customerLabel?: string;       // Default: "Pelanggan:"
+  subtotalLabel?: string;       // Default: "SUBTOTAL:"
+  discountLabel?: string;       // Default: "DISKON"
+  itemDiscountLabel?: string;   // Default: "DISKON BARANG:"
+  taxLabel?: string;            // Default: "PAJAK / PPN"
+  totalLabel?: string;          // Default: "TOTAL AKHIR:"
+  paymentMethodLabel?: string;  // Default: "METODE BAYAR:"
+  paymentStatusLabel?: string;  // Default: "STATUS PELUNASAN:"
+  cashReceivedLabel?: string;   // Default: "BAYAR TUNAI:"
+  changeAmountLabel?: string;   // Default: "KEMBALIAN:"
+}
+
 export interface Item {
   id: string;
   name: string;
@@ -62,6 +89,8 @@ export interface Receipt {
   fontFamily?: ReceiptFontFamily;
   paperWidthMm?: number; // Thermal receipt width in millimeters (e.g., 58, 80, 76, 100, or custom)
   paperSizePreset?: ReceiptPaperSizePreset;
+  labels?: ReceiptLabels;
+  customLabels?: CustomLabel[];
 }
 
 export interface StoreProfile {
@@ -89,4 +118,6 @@ export interface StoreProfile {
   fontFamily?: ReceiptFontFamily;
   paperWidthMm?: number;
   paperSizePreset?: ReceiptPaperSizePreset;
+  labels?: ReceiptLabels;
+  customLabels?: CustomLabel[];
 }

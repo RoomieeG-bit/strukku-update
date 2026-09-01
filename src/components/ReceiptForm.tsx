@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm } from '../utils';
+import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition } from '../types';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   Store, 
@@ -44,7 +44,11 @@ import {
   CheckCircle2,
   Info,
   Maximize2,
-  Printer
+  Printer,
+  Tag,
+  Bookmark,
+  Edit3,
+  HelpCircle
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -177,7 +181,14 @@ export default function ReceiptForm({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemDiscount, setNewItemDiscount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'size' | 'fonts' | 'code' | 'templates'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'size' | 'fonts' | 'labels' | 'code' | 'templates'>('store');
+  const [labelSubTab, setLabelSubTab] = useState<'CUSTOM' | 'STANDARD' | 'PRESETS'>('CUSTOM');
+  const [newCustomLabel, setNewCustomLabel] = useState('');
+  const [newCustomValue, setNewCustomValue] = useState('');
+  const [newCustomPosition, setNewCustomPosition] = useState<CustomLabelPosition>('META');
+  const [newCustomIsBold, setNewCustomIsBold] = useState(false);
+  const [newCustomShowColon, setNewCustomShowColon] = useState(true);
+  const [labelFeedbackMsg, setLabelFeedbackMsg] = useState('');
   const [fontCategoryFilter, setFontCategoryFilter] = useState<string>('ALL');
   const [customFontSampleText, setCustomFontSampleText] = useState<string>('');
   const [copiedQrContent, setCopiedQrContent] = useState(false);
@@ -206,6 +217,16 @@ export default function ReceiptForm({
       return () => clearTimeout(timer);
     }
   }, [presetSuccessMsg]);
+
+  // Clear label feedback message after 3 seconds
+  useEffect(() => {
+    if (labelFeedbackMsg) {
+      const timer = setTimeout(() => {
+        setLabelFeedbackMsg('');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [labelFeedbackMsg]);
 
   // Add current active receipt as preset
   const handleSaveAsPreset = (e: React.FormEvent) => {
@@ -364,6 +385,75 @@ export default function ReceiptForm({
     handleRecalculate({ dateTime: localNow.toISOString().slice(0, 16) });
   };
 
+  // Label Handlers
+  const handleAddCustomLabel = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newCustomLabel.trim() && !newCustomValue.trim()) {
+      setLabelFeedbackMsg('Error: Mohon isi nama label atau nilai teks.');
+      return;
+    }
+    const newField: CustomLabel = {
+      id: 'lbl_' + Math.random().toString(36).substring(2, 9),
+      label: newCustomLabel.trim(),
+      value: newCustomValue.trim(),
+      position: newCustomPosition,
+      isBold: newCustomIsBold,
+      showColon: newCustomShowColon,
+    };
+    const updatedCustom = [...(receipt.customLabels || []), newField];
+    handleRecalculate({ customLabels: updatedCustom });
+    setNewCustomLabel('');
+    setNewCustomValue('');
+    setLabelFeedbackMsg('Sukses: Label kustom baru berhasil ditambahkan ke struk!');
+  };
+
+  const handleAddSuggestedCustom = (sug: typeof SUGGESTED_CUSTOM_LABELS[0]) => {
+    const newField: CustomLabel = {
+      id: 'lbl_' + Math.random().toString(36).substring(2, 9),
+      label: sug.label,
+      value: sug.value,
+      position: sug.position,
+      isBold: sug.isBold || false,
+      showColon: true,
+    };
+    const updatedCustom = [...(receipt.customLabels || []), newField];
+    handleRecalculate({ customLabels: updatedCustom });
+    setLabelFeedbackMsg(`Sukses: Label "${sug.label}" berhasil ditambahkan!`);
+  };
+
+  const handleRemoveCustomLabel = (id: string) => {
+    const updated = (receipt.customLabels || []).filter(l => l.id !== id);
+    handleRecalculate({ customLabels: updated });
+    setLabelFeedbackMsg('Label kustom berhasil dihapus.');
+  };
+
+  const handleUpdateCustomLabel = (id: string, updates: Partial<CustomLabel>) => {
+    const updated = (receipt.customLabels || []).map(l => l.id === id ? { ...l, ...updates } : l);
+    handleRecalculate({ customLabels: updated });
+  };
+
+  const handleUpdateStandardLabel = (key: keyof ReceiptLabels, value: string) => {
+    const updatedLabels = {
+      ...(receipt.labels || {}),
+      [key]: value,
+    };
+    handleRecalculate({ labels: updatedLabels });
+  };
+
+  const handleApplyLabelPreset = (preset: typeof LABEL_PRESETS[0]) => {
+    handleRecalculate({
+      labels: { ...preset.labels },
+    });
+    setLabelFeedbackMsg(`Sukses: Preset label "${preset.name}" berhasil diterapkan!`);
+  };
+
+  const handleResetStandardLabels = () => {
+    handleRecalculate({
+      labels: { ...DEFAULT_RECEIPT_LABELS },
+    });
+    setLabelFeedbackMsg('Sukses: Semua label standar dikembalikan ke teks bawaan!');
+  };
+
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full" id="receipt-form-panel">
       {/* Tab Navigation */}
@@ -449,6 +539,26 @@ export default function ReceiptForm({
           )}
         </button>
         <button
+          onClick={() => setActiveTab('labels')}
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'labels'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+          }`}
+          id="tab-receipt-labels"
+        >
+          <Tag className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+          <span className="hidden md:inline">Ubah Label</span>
+          <span className="md:hidden">Label</span>
+          {((receipt.customLabels && receipt.customLabels.length > 0) || (receipt.labels && Object.keys(receipt.labels).length > 0)) && (
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'labels' ? 'bg-amber-400 text-slate-950' : 'bg-slate-200 text-slate-800'
+            }`}>
+              {(receipt.customLabels?.length || 0) + (receipt.labels ? Object.values(receipt.labels).filter(Boolean).length : 0)}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('code')}
           className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'code'
@@ -458,7 +568,7 @@ export default function ReceiptForm({
           id="tab-barcode-qr"
         >
           <QrCode className="w-3.5 h-3.5 shrink-0" />
-          <span>Barcode dan QR</span>
+          <span>Barcode & QR</span>
         </button>
         <button
           onClick={() => setActiveTab('templates')}
@@ -1650,6 +1760,511 @@ export default function ReceiptForm({
               </p>
             </div>
 
+          </div>
+        )}
+
+        {/* TAB: UBAH LABEL & CUSTOM FIELDS */}
+        {activeTab === 'labels' && (
+          <div className="space-y-5" id="form-section-labels">
+            {/* Header Banner */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl flex items-start gap-3">
+              <div className="p-2 bg-slate-900 text-white rounded-lg shrink-0 mt-0.5">
+                <Tag className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Kustomisasi Label & Tambah Field Sendiri</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                  Sesuaikan teks penamaan kolom standar struk (seperti mengganti "No. Bon", "Kasir", "Subtotal") atau tambahkan baris data kustom Anda sendiri (seperti No. Meja, Driver Ojol, Plat Nomor Kendaraan, Poin Member, Garansi Toko).
+                </p>
+              </div>
+            </div>
+
+            {/* Notification Feedback Message */}
+            {labelFeedbackMsg && (
+              <div className={`p-2.5 rounded-xl text-xs font-semibold flex items-center justify-between transition-all ${
+                labelFeedbackMsg.startsWith('Error') 
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              }`}>
+                <span>{labelFeedbackMsg}</span>
+                <button 
+                  type="button" 
+                  onClick={() => setLabelFeedbackMsg('')} 
+                  className="text-xs opacity-60 hover:opacity-100 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Sub-tabs Selector */}
+            <div className="flex border border-slate-200 bg-slate-100/80 p-1 rounded-xl gap-1">
+              <button
+                type="button"
+                onClick={() => setLabelSubTab('CUSTOM')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  labelSubTab === 'CUSTOM'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5 text-amber-500" />
+                <span>Tambah Label Sendiri</span>
+                {(receipt.customLabels?.length || 0) > 0 && (
+                  <span className="bg-amber-100 text-amber-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                    {receipt.customLabels?.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelSubTab('STANDARD')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  labelSubTab === 'STANDARD'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Ubah Label Standar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLabelSubTab('PRESETS')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  labelSubTab === 'PRESETS'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-slate-700" />
+                <span>Preset Bahasa</span>
+              </button>
+            </div>
+
+            {/* SUBTAB 1: TAMBAH LABEL SENDIRI (CUSTOM LABELS) */}
+            {labelSubTab === 'CUSTOM' && (
+              <div className="space-y-4">
+                {/* Form Tambah Label Kustom */}
+                <div className="bg-slate-50/70 p-4 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <Plus className="w-4 h-4 text-slate-900" /> Tambah Baris Label Baru ke Struk
+                    </h4>
+                    <span className="text-[10px] text-slate-400">Muncul langsung di struk</span>
+                  </div>
+
+                  <form onSubmit={handleAddCustomLabel} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Nama Label / Judul Kolom <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomLabel}
+                          onChange={(e) => setNewCustomLabel(e.target.value)}
+                          placeholder="Cth: No. Meja, Driver Ojol, Plat Nomor"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Isi / Nilai Teks <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomValue}
+                          onChange={(e) => setNewCustomValue(e.target.value)}
+                          placeholder="Cth: Meja 12 (Outdoor), GoFood - Budi"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      <div className="sm:col-span-1">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Posisi Penempatan di Struk
+                        </label>
+                        <select
+                          value={newCustomPosition}
+                          onChange={(e) => setNewCustomPosition(e.target.value as CustomLabelPosition)}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none cursor-pointer"
+                        >
+                          <option value="META">📌 Info Nota (Dekat No. Bon & Kasir)</option>
+                          <option value="HEADER">🏢 Header Toko (Bawah Alamat)</option>
+                          <option value="ITEMS_SUMMARY">🛒 Ringkasan Barang (Dekat Subtotal)</option>
+                          <option value="PAYMENT">💳 Pembayaran (Dekat Cara Bayar)</option>
+                          <option value="FOOTER">📄 Footer Struk (Bawah Barcode/QR)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-4 sm:col-span-2 pt-2 sm:pt-6">
+                        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newCustomIsBold}
+                            onChange={(e) => setNewCustomIsBold(e.target.checked)}
+                            className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900"
+                          />
+                          <span>Cetak Tebal (Bold)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newCustomShowColon}
+                            onChange={(e) => setNewCustomShowColon(e.target.checked)}
+                            className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900"
+                          />
+                          <span>Titik Dua (:)</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-slate-950 text-white text-xs font-bold rounded-lg flex items-center gap-2 shadow-xs transition active:scale-98 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" /> Tambah Label ke Struk
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Quick Add Suggestions Chips */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <Bookmark className="w-3.5 h-3.5 text-amber-500" /> Saran Label Populer (Klik untuk Tambah Instan)
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SUGGESTED_CUSTOM_LABELS.map((sug, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleAddSuggestedCustom(sug)}
+                        className="text-[11px] px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 hover:border-slate-400 text-slate-700 font-medium rounded-lg transition flex items-center gap-1 cursor-pointer shadow-2xs group"
+                        title={`Posisi: ${sug.position} | Nilai: ${sug.value}`}
+                      >
+                        <Plus className="w-3 h-3 text-slate-400 group-hover:text-slate-900" />
+                        <span>{sug.label}: <strong>{sug.value}</strong></span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* List of Active Custom Labels */}
+                <div className="space-y-2.5 pt-2">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      Label Kustom Aktif di Struk ({receipt.customLabels?.length || 0})
+                    </h4>
+                    {(receipt.customLabels?.length || 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculate({ customLabels: [] })}
+                        className="text-[11px] text-rose-600 hover:text-rose-700 font-medium hover:underline cursor-pointer"
+                      >
+                        Hapus Semua Label Kustom
+                      </button>
+                    )}
+                  </div>
+
+                  {(!receipt.customLabels || receipt.customLabels.length === 0) ? (
+                    <div className="bg-slate-50/60 border border-dashed border-slate-200 rounded-xl p-6 text-center text-slate-500 space-y-2">
+                      <Tag className="w-6 h-6 text-slate-300 mx-auto" />
+                      <div className="text-xs font-bold text-slate-700">Belum Ada Label Kustom</div>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                        Tambahkan label kustom di atas atau klik salah satu saran cepat untuk memunculkan informasi tambahan di struk Anda.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {receipt.customLabels.map((lbl, idx) => {
+                        const positionNames: Record<CustomLabelPosition, string> = {
+                          META: 'Info Nota (Atas)',
+                          HEADER: 'Header Toko',
+                          ITEMS_SUMMARY: 'Ringkasan Item',
+                          PAYMENT: 'Pembayaran',
+                          FOOTER: 'Footer Struk'
+                        };
+
+                        return (
+                          <div
+                            key={lbl.id || idx}
+                            className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs space-y-2.5 transition hover:border-slate-300"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                📍 {positionNames[lbl.position] || lbl.position}
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={lbl.isBold || false}
+                                    onChange={(e) => handleUpdateCustomLabel(lbl.id, { isBold: e.target.checked })}
+                                    className="w-3.5 h-3.5 rounded text-slate-900 border-slate-300 focus:ring-slate-900"
+                                  />
+                                  <span>Tebal</span>
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCustomLabel(lbl.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition cursor-pointer"
+                                  title="Hapus label ini"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-400 uppercase">Nama Label</label>
+                                <input
+                                  type="text"
+                                  value={lbl.label}
+                                  onChange={(e) => handleUpdateCustomLabel(lbl.id, { label: e.target.value })}
+                                  placeholder="Nama Label"
+                                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none font-medium"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-400 uppercase">Isi Teks</label>
+                                <input
+                                  type="text"
+                                  value={lbl.value}
+                                  onChange={(e) => handleUpdateCustomLabel(lbl.id, { value: e.target.value })}
+                                  placeholder="Nilai / Isi"
+                                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-semibold text-slate-400 uppercase">Posisi</label>
+                                <select
+                                  value={lbl.position}
+                                  onChange={(e) => handleUpdateCustomLabel(lbl.id, { position: e.target.value as CustomLabelPosition })}
+                                  className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none cursor-pointer"
+                                >
+                                  <option value="META">📌 Info Nota</option>
+                                  <option value="HEADER">🏢 Header Toko</option>
+                                  <option value="ITEMS_SUMMARY">🛒 Ringkasan Barang</option>
+                                  <option value="PAYMENT">💳 Pembayaran</option>
+                                  <option value="FOOTER">📄 Footer</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 2: UBAH LABEL STANDAR (STANDARD LABELS) */}
+            {labelSubTab === 'STANDARD' && (
+              <div className="space-y-4">
+                <div className="bg-slate-50/70 p-4 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        Ganti Teks Label Standar Struk
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Ubah istilah bawaan jika Anda memerlukan bahasa asing atau format nota khusus.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetStandardLabels}
+                      className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                      title="Kembalikan semua teks label ke default"
+                    >
+                      <RotateCcw className="w-3 h-3 text-slate-500" /> Reset Default
+                    </button>
+                  </div>
+
+                  {(() => {
+                    const currentLabels = getReceiptLabels(receipt.labels);
+                    const standardFields: Array<{
+                      key: keyof ReceiptLabels;
+                      title: string;
+                      placeholder: string;
+                      currentValue: string;
+                      category: string;
+                    }> = [
+                      {
+                        key: 'transactionIdLabel',
+                        title: 'Nomor Transaksi / Bon',
+                        placeholder: 'No. Bon:',
+                        currentValue: currentLabels.transactionIdLabel,
+                        category: 'Metadata Transaksi'
+                      },
+                      {
+                        key: 'dateTimeLabel',
+                        title: 'Tanggal & Waktu',
+                        placeholder: 'Tanggal:',
+                        currentValue: currentLabels.dateTimeLabel,
+                        category: 'Metadata Transaksi'
+                      },
+                      {
+                        key: 'cashierLabel',
+                        title: 'Nama Kasir / Staff',
+                        placeholder: 'Kasir:',
+                        currentValue: currentLabels.cashierLabel,
+                        category: 'Metadata Transaksi'
+                      },
+                      {
+                        key: 'customerLabel',
+                        title: 'Nama Pelanggan / Tamu',
+                        placeholder: 'Pelanggan:',
+                        currentValue: currentLabels.customerLabel,
+                        category: 'Metadata Transaksi'
+                      },
+                      {
+                        key: 'subtotalLabel',
+                        title: 'Label Subtotal',
+                        placeholder: 'SUBTOTAL:',
+                        currentValue: currentLabels.subtotalLabel,
+                        category: 'Ringkasan Biaya'
+                      },
+                      {
+                        key: 'discountLabel',
+                        title: 'Label Diskon Utama',
+                        placeholder: 'DISKON',
+                        currentValue: currentLabels.discountLabel,
+                        category: 'Ringkasan Biaya'
+                      },
+                      {
+                        key: 'itemDiscountLabel',
+                        title: 'Label Diskon Per Barang',
+                        placeholder: 'DISKON BARANG:',
+                        currentValue: currentLabels.itemDiscountLabel,
+                        category: 'Ringkasan Biaya'
+                      },
+                      {
+                        key: 'taxLabel',
+                        title: 'Label Pajak / PPN',
+                        placeholder: 'PAJAK / PPN',
+                        currentValue: currentLabels.taxLabel,
+                        category: 'Ringkasan Biaya'
+                      },
+                      {
+                        key: 'totalLabel',
+                        title: 'Label Total Akhir',
+                        placeholder: 'TOTAL AKHIR:',
+                        currentValue: currentLabels.totalLabel,
+                        category: 'Ringkasan Biaya'
+                      },
+                      {
+                        key: 'paymentMethodLabel',
+                        title: 'Label Metode Pembayaran',
+                        placeholder: 'METODE BAYAR:',
+                        currentValue: currentLabels.paymentMethodLabel,
+                        category: 'Detail Pelunasan'
+                      },
+                      {
+                        key: 'paymentStatusLabel',
+                        title: 'Label Status Pelunasan',
+                        placeholder: 'STATUS PELUNASAN:',
+                        currentValue: currentLabels.paymentStatusLabel,
+                        category: 'Detail Pelunasan'
+                      },
+                      {
+                        key: 'cashReceivedLabel',
+                        title: 'Label Bayar Tunai (Cash)',
+                        placeholder: 'BAYAR TUNAI:',
+                        currentValue: currentLabels.cashReceivedLabel,
+                        category: 'Detail Pelunasan'
+                      },
+                      {
+                        key: 'changeAmountLabel',
+                        title: 'Label Uang Kembalian',
+                        placeholder: 'KEMBALIAN:',
+                        currentValue: currentLabels.changeAmountLabel,
+                        category: 'Detail Pelunasan'
+                      },
+                    ];
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        {standardFields.map((field) => (
+                          <div key={field.key} className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[11px] font-bold text-slate-700">{field.title}</label>
+                              <span className="text-[9px] text-slate-400 font-mono">{field.placeholder}</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={receipt.labels?.[field.key] ?? ''}
+                              onChange={(e) => handleUpdateStandardLabel(field.key, e.target.value)}
+                              placeholder={`Default: ${field.placeholder}`}
+                              className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md text-xs bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none font-medium text-slate-900"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB 3: PRESET BAHASA & INDUSTRI (PRESETS) */}
+            {labelSubTab === 'PRESETS' && (
+              <div className="space-y-4">
+                <div className="border-b border-slate-100 pb-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Pilih Preset Bahasa atau Format Industri
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Terapkan paket label yang sudah disesuaikan untuk tipe bisnis atau bahasa tertentu dengan 1 klik.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {LABEL_PRESETS.map((preset) => (
+                    <div
+                      key={preset.id}
+                      className="bg-white border border-slate-200 hover:border-slate-900 p-4 rounded-xl space-y-3 transition group flex flex-col justify-between shadow-2xs"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-xs font-bold text-slate-900 group-hover:text-slate-950 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-amber-500" />
+                            {preset.name}
+                          </h5>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          {preset.description}
+                        </p>
+
+                        <div className="bg-slate-50 p-2 rounded-lg text-[10px] font-mono text-slate-600 space-y-0.5 border border-slate-100">
+                          <div>• {preset.labels.transactionIdLabel} 102938</div>
+                          <div>• {preset.labels.cashierLabel} Budi</div>
+                          <div>• {preset.labels.totalLabel} Rp 75.000</div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApplyLabelPreset(preset)}
+                        className="w-full py-2 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-800 text-xs font-bold rounded-lg transition text-center cursor-pointer"
+                      >
+                        Terapkan Preset Ini
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

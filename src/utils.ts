@@ -3,7 +3,143 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Item, ReceiptFontFamily, ReceiptPaperSizePreset } from './types';
+import { Item, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition } from './types';
+
+export const DEFAULT_RECEIPT_LABELS: Required<ReceiptLabels> = {
+  transactionIdLabel: 'No. Bon:',
+  dateTimeLabel: 'Tanggal:',
+  cashierLabel: 'Kasir:',
+  customerLabel: 'Pelanggan:',
+  subtotalLabel: 'SUBTOTAL:',
+  discountLabel: 'DISKON',
+  itemDiscountLabel: 'DISKON BARANG:',
+  taxLabel: 'PAJAK / PPN',
+  totalLabel: 'TOTAL AKHIR:',
+  paymentMethodLabel: 'METODE BAYAR:',
+  paymentStatusLabel: 'STATUS PELUNASAN:',
+  cashReceivedLabel: 'BAYAR TUNAI:',
+  changeAmountLabel: 'KEMBALIAN:',
+};
+
+export interface LabelPreset {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  labels: Required<ReceiptLabels>;
+}
+
+export const LABEL_PRESETS: LabelPreset[] = [
+  {
+    id: 'DEFAULT',
+    name: 'Standar Indonesia (Default)',
+    badge: '🇮🇩 Retail / Kasir',
+    description: 'Format bahasa Indonesia standar minimarket, swalayan, dan toko retail.',
+    labels: { ...DEFAULT_RECEIPT_LABELS },
+  },
+  {
+    id: 'ENGLISH',
+    name: 'English POS Standard',
+    badge: '🇬🇧 Global / English',
+    description: 'Standard English thermal receipt format for international POS and tourists.',
+    labels: {
+      transactionIdLabel: 'Receipt #:',
+      dateTimeLabel: 'Date / Time:',
+      cashierLabel: 'Cashier:',
+      customerLabel: 'Customer:',
+      subtotalLabel: 'SUBTOTAL:',
+      discountLabel: 'DISCOUNT',
+      itemDiscountLabel: 'ITEM DISCOUNT:',
+      taxLabel: 'TAX / VAT',
+      totalLabel: 'GRAND TOTAL:',
+      paymentMethodLabel: 'PAYMENT METHOD:',
+      paymentStatusLabel: 'PAYMENT STATUS:',
+      cashReceivedLabel: 'CASH TENDERED:',
+      changeAmountLabel: 'CHANGE DUE:',
+    },
+  },
+  {
+    id: 'CAFE_RESTO',
+    name: 'Kafe, Resto & F&B',
+    badge: '☕ Kafe & Restoran',
+    description: 'Format struk makanan & minuman: No. Pesanan, Server, PB1, Total Tagihan.',
+    labels: {
+      transactionIdLabel: 'No. Pesanan:',
+      dateTimeLabel: 'Waktu Order:',
+      cashierLabel: 'Server / Kasir:',
+      customerLabel: 'Nama Tamu:',
+      subtotalLabel: 'Sub Total Makanan:',
+      discountLabel: 'Potongan Promo',
+      itemDiscountLabel: 'Diskon Menu:',
+      taxLabel: 'PB1 / Pajak Resto',
+      totalLabel: 'TOTAL TAGIHAN:',
+      paymentMethodLabel: 'Cara Bayar:',
+      paymentStatusLabel: 'Status Tagihan:',
+      cashReceivedLabel: 'Uang Diterima:',
+      changeAmountLabel: 'Uang Kembali:',
+    },
+  },
+  {
+    id: 'FORMAL_INVOICE',
+    name: 'Faktur / Nota Formal',
+    badge: '🏢 Faktur & Nota',
+    description: 'Format nota resmi perusahaan: No. Faktur, Petugas, PPN 11%, Jumlah Bersih.',
+    labels: {
+      transactionIdLabel: 'No. Faktur:',
+      dateTimeLabel: 'Tgl Transaksi:',
+      cashierLabel: 'Petugas / Admin:',
+      customerLabel: 'Nama Klien / Pembeli:',
+      subtotalLabel: 'Jumlah Kotor (Gross):',
+      discountLabel: 'Potongan / Rabatt',
+      itemDiscountLabel: 'Potongan Item:',
+      taxLabel: 'PPN (Pajak Pertambahan Nilai)',
+      totalLabel: 'JUMLAH BERSIH (NETTO):',
+      paymentMethodLabel: 'Metode Pembayaran:',
+      paymentStatusLabel: 'Status Pembayaran:',
+      cashReceivedLabel: 'Jumlah Dibayar:',
+      changeAmountLabel: 'Sisa Kembalian:',
+    },
+  },
+];
+
+export interface SuggestedCustomLabel {
+  label: string;
+  value: string;
+  position: CustomLabelPosition;
+  isBold?: boolean;
+  category: string;
+}
+
+export const SUGGESTED_CUSTOM_LABELS: SuggestedCustomLabel[] = [
+  { label: 'No. Meja', value: 'Meja 08 (Area Outdoor)', position: 'META', isBold: true, category: '🍽️ F&B / Kafe' },
+  { label: 'No. Antrean', value: 'A-042', position: 'HEADER', isBold: true, category: '🎟️ Antrean' },
+  { label: 'Tipe Pesanan', value: 'Dine In (Makan di Tempat)', position: 'META', isBold: false, category: '🍽️ F&B / Kafe' },
+  { label: 'Plat Nomor', value: 'B 1234 XYZ', position: 'META', isBold: true, category: '🚗 Bengkel / Parkir' },
+  { label: 'Poin Member', value: '+150 Poin (Total: 1.250)', position: 'ITEMS_SUMMARY', isBold: false, category: '⭐ Loyalty' },
+  { label: 'Driver Ojol', value: 'Gojek - Slamet (GK-992)', position: 'META', isBold: false, category: '🛵 Delivery' },
+  { label: 'Shift Kerja', value: 'Shift 1 (Pagi)', position: 'META', isBold: false, category: '💼 Operasional' },
+  { label: 'NPWP Toko', value: '01.234.567.8-901.000', position: 'HEADER', isBold: false, category: '🏢 Pajak & Usaha' },
+  { label: 'Garansi Produk', value: 'Garansi Toko 7 Hari (Simpan Struk)', position: 'FOOTER', isBold: false, category: '🛡️ Garansi' },
+  { label: 'Catatan Pesanan', value: 'Less sugar, es dipisah', position: 'ITEMS_SUMMARY', isBold: false, category: '📝 Catatan' },
+];
+
+export function getReceiptLabels(labels?: ReceiptLabels): Required<ReceiptLabels> {
+  return {
+    transactionIdLabel: labels?.transactionIdLabel?.trim() || DEFAULT_RECEIPT_LABELS.transactionIdLabel,
+    dateTimeLabel: labels?.dateTimeLabel?.trim() || DEFAULT_RECEIPT_LABELS.dateTimeLabel,
+    cashierLabel: labels?.cashierLabel?.trim() || DEFAULT_RECEIPT_LABELS.cashierLabel,
+    customerLabel: labels?.customerLabel?.trim() || DEFAULT_RECEIPT_LABELS.customerLabel,
+    subtotalLabel: labels?.subtotalLabel?.trim() || DEFAULT_RECEIPT_LABELS.subtotalLabel,
+    discountLabel: labels?.discountLabel?.trim() || DEFAULT_RECEIPT_LABELS.discountLabel,
+    itemDiscountLabel: labels?.itemDiscountLabel?.trim() || DEFAULT_RECEIPT_LABELS.itemDiscountLabel,
+    taxLabel: labels?.taxLabel?.trim() || DEFAULT_RECEIPT_LABELS.taxLabel,
+    totalLabel: labels?.totalLabel?.trim() || DEFAULT_RECEIPT_LABELS.totalLabel,
+    paymentMethodLabel: labels?.paymentMethodLabel?.trim() || DEFAULT_RECEIPT_LABELS.paymentMethodLabel,
+    paymentStatusLabel: labels?.paymentStatusLabel?.trim() || DEFAULT_RECEIPT_LABELS.paymentStatusLabel,
+    cashReceivedLabel: labels?.cashReceivedLabel?.trim() || DEFAULT_RECEIPT_LABELS.cashReceivedLabel,
+    changeAmountLabel: labels?.changeAmountLabel?.trim() || DEFAULT_RECEIPT_LABELS.changeAmountLabel,
+  };
+}
 
 export interface ReceiptFontOption {
   id: ReceiptFontFamily;
