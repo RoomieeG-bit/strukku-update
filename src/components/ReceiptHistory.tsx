@@ -19,7 +19,13 @@ import {
   RefreshCw, 
   History,
   CheckCircle2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X,
+  User,
+  ShoppingBag,
+  Filter,
+  Copy,
+  Check
 } from 'lucide-react';
 
 interface ReceiptHistoryProps {
@@ -44,14 +50,20 @@ export default function ReceiptHistory({
   const [dateFilter, setDateFilter] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Filter and search history list
   const filteredHistory = history.filter((item) => {
-    const matchesSearch = 
-      item.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.transactionId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.cashierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.items.some((i) => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !term ||
+      item.transactionId.toLowerCase().includes(term) ||
+      (item.customerName && item.customerName.toLowerCase().includes(term)) ||
+      item.storeName.toLowerCase().includes(term) ||
+      item.cashierName.toLowerCase().includes(term) ||
+      item.items.some((i) => 
+        i.name.toLowerCase().includes(term) || 
+        (i.id && i.id.toLowerCase().includes(term))
+      );
 
     const matchesMethod = methodFilter === 'ALL' || 
       item.paymentMethod === methodFilter || 
@@ -68,6 +80,19 @@ export default function ReceiptHistory({
     (sum, item) => sum + item.items.reduce((acc, i) => acc + i.quantity, 0),
     0
   );
+
+  const handleCopyTransactionId = (e: React.MouseEvent, txId: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(txId);
+    setCopiedId(txId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setMethodFilter('ALL');
+    setDateFilter('');
+  };
 
   // Backup history as JSON file download
   const handleExportJSON = () => {
@@ -118,7 +143,7 @@ export default function ReceiptHistory({
           </div>
           <div>
             <h3 className="font-bold text-slate-800 font-display text-sm">Riwayat Transaksi</h3>
-            <span className="text-xs text-slate-500 font-medium">Laporan penjualan & manajemen kasir</span>
+            <span className="text-xs text-slate-500 font-medium">Laporan penjualan & arsip transaksi</span>
           </div>
         </div>
 
@@ -173,48 +198,83 @@ export default function ReceiptHistory({
         </div>
       )}
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 border-b border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3 bg-white shrink-0">
+      {/* Filter and Search Bar Section */}
+      <div className="p-4 border-b border-slate-100 bg-white space-y-3 shrink-0">
+        {/* Main Search Input Field */}
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
             <Search className="w-4 h-4" />
           </span>
           <input
             type="text"
-            placeholder="Cari Toko, Struk ID, Kasir, atau Barang..."
+            placeholder="Cari ID Transaksi, Nama Pelanggan, Kasir, atau Item Barang..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
-            id="history-search"
+            className="w-full pl-10 pr-9 py-2.5 bg-slate-50/70 border border-slate-200 hover:border-slate-300 focus:bg-white rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 outline-none transition shadow-2xs"
+            id="history-search-input"
+            autoComplete="off"
           />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+              title="Hapus kata pencarian"
+              id="clear-search-btn"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        <div>
-          <select
-            value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none font-medium text-slate-600"
-            id="history-method-filter"
-          >
-            <option value="ALL">💳 Semua Metode / Status</option>
-            <option value="CASH">💵 Tunai (CASH)</option>
-            <option value="QRIS">📱 QRIS / E-Wallet</option>
-            <option value="DEBIT">💳 Kartu Debit</option>
-            <option value="CREDIT">💳 Kartu Kredit</option>
-            <option value="SUDAH_LUNAS">✅ Sudah Lunas</option>
-            <option value="BELUM_LUNAS">⏳ Belum Lunas</option>
-            <option value="HUTANG">💸 Hutang</option>
-          </select>
-        </div>
+        {/* Filters and Search Status Row */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1 min-w-[260px]">
+            <div>
+              <select
+                value={methodFilter}
+                onChange={(e) => setMethodFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none font-medium text-slate-700 cursor-pointer"
+                id="history-method-filter"
+              >
+                <option value="ALL">💳 Semua Metode & Status</option>
+                <option value="CASH">💵 Tunai (CASH)</option>
+                <option value="QRIS">📱 QRIS / E-Wallet</option>
+                <option value="DEBIT">💳 Kartu Debit</option>
+                <option value="CREDIT">💳 Kartu Kredit</option>
+                <option value="SUDAH_LUNAS">✅ Sudah Lunas</option>
+                <option value="BELUM_LUNAS">⏳ Belum Lunas</option>
+                <option value="HUTANG">💸 Hutang</option>
+              </select>
+            </div>
 
-        <div>
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-600 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
-            id="history-date-filter"
-          />
+            <div>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none cursor-pointer"
+                id="history-date-filter"
+              />
+            </div>
+          </div>
+
+          {/* Results Count & Reset Filter Indicator */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-slate-500 font-medium">
+              <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {history.length} transaksi
+            </span>
+            {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
+                id="reset-all-filters-btn"
+              >
+                <RefreshCw className="w-3 h-3" /> Reset Filter
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -223,12 +283,25 @@ export default function ReceiptHistory({
         {filteredHistory.length === 0 ? (
           <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center h-full">
             <History className="w-12 h-12 text-slate-200 mb-3" />
-            <p className="text-sm font-semibold text-slate-600">Belum ada transaksi ditemukan</p>
-            <p className="text-xs text-slate-400 mt-1">
-              {searchTerm || methodFilter !== 'ALL' || dateFilter 
-                ? 'Coba bersihkan pencarian atau filter Anda.' 
-                : 'Buat struk baru di tab generator lalu simpan ke riwayat.'}
+            <p className="text-sm font-semibold text-slate-700">
+              {searchTerm || methodFilter !== 'ALL' || dateFilter
+                ? 'Tidak ada transaksi yang cocok'
+                : 'Belum ada riwayat transaksi'}
             </p>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm">
+              {searchTerm || methodFilter !== 'ALL' || dateFilter 
+                ? `Tidak ditemukan transaksi dengan kata kunci "${searchTerm || methodFilter}". Coba ubah atau bersihkan filter pencarian.` 
+                : 'Struk yang Anda buat di tab generator akan tersimpan secara otomatis di sini.'}
+            </p>
+            {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="mt-4 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <RefreshCw className="w-3 h-3" /> Bersihkan Filter & Cari Ulang
+              </button>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-slate-100" id="history-items-list">
@@ -239,7 +312,7 @@ export default function ReceiptHistory({
               >
                 {/* Store details */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-slate-800 text-sm truncate font-display">
                       {item.storeName}
                     </span>
@@ -260,44 +333,91 @@ export default function ReceiptHistory({
                       {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
                        (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
                     </span>
+                    {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
+                        {item.fontFamily === 'EAS' ? 'EAS Alert' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit CRT' : item.fontFamily === 'DOT_MATRIX' ? 'Dot Matrix' : item.fontFamily}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
                     <div className="flex items-center gap-1">
                       <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="font-mono text-[10px] text-slate-600 truncate font-semibold" title={item.transactionId}>
+                      <span className="font-mono text-[10px] text-slate-700 truncate font-semibold" title={item.transactionId}>
                         {item.transactionId}
                       </span>
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                        className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition cursor-pointer"
+                        title="Salin ID Transaksi"
+                      >
+                        {copiedId === item.transactionId ? (
+                          <Check className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
                     </div>
+
+                    {item.customerName ? (
+                      <div className="flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate font-medium text-slate-700" title={`Pelanggan: ${item.customerName}`}>
+                          {item.customerName}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                        <span className="truncate text-slate-400" title={`Kasir: ${item.cashierName}`}>
+                          Kasir: {item.cashierName}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>{formatDateTime(item.dateTime).split(' ')[0]}</span>
                     </div>
-                    <div className="flex items-center gap-1 col-span-2 sm:col-span-1">
-                      <span className="text-slate-400">Barang:</span>
+
+                    <div className="flex items-center gap-1">
+                      <ShoppingBag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="font-semibold text-slate-700">
-                        {item.items.reduce((sum, i) => sum + i.quantity, 0)} pcs
+                        {item.items.reduce((sum, i) => sum + i.quantity, 0)} pcs ({item.items.length} item)
                       </span>
                     </div>
                   </div>
 
                   {/* List of short preview items */}
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {item.items.slice(0, 3).map((it, idx) => (
-                      <span key={idx} className="bg-slate-100 text-slate-600 text-[10px] px-2 py-0.5 rounded-full">
-                        {it.name} x{it.quantity}
-                      </span>
-                    ))}
-                    {item.items.length > 3 && (
+                    {item.items.slice(0, 4).map((it, idx) => {
+                      const isItemMatched = searchTerm && it.name.toLowerCase().includes(searchTerm.toLowerCase().trim());
+                      return (
+                        <span 
+                          key={idx} 
+                          onClick={() => setSearchTerm(it.name)}
+                          className={`text-[10px] px-2 py-0.5 rounded-full transition cursor-pointer ${
+                            isItemMatched 
+                              ? 'bg-slate-900 text-white font-bold' 
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                          title={`Cari transaksi yang memiliki item "${it.name}"`}
+                        >
+                          {it.name} x{it.quantity}
+                        </span>
+                      );
+                    })}
+                    {item.items.length > 4 && (
                       <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                        +{item.items.length - 3} lainnya
+                        +{item.items.length - 4} lainnya
                       </span>
                     )}
                   </div>
                 </div>
 
                 {/* Right side Amount and Restore Actions */}
-                <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0">
+                <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
                   <div className="text-right">
                     <span className="text-xs text-slate-400 block">Total Belanja</span>
                     <span className="text-sm font-mono font-bold text-slate-900 block">

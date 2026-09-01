@@ -3,7 +3,111 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Item } from './types';
+import { Item, ReceiptFontFamily } from './types';
+
+export interface ReceiptFontOption {
+  id: ReceiptFontFamily;
+  name: string;
+  category: 'EAS' | 'DEFAULT' | 'DOT MATRIX' | 'CLASSIC' | 'MODERN';
+  fontFamilyCss: string;
+  className: string;
+  description: string;
+  sampleText: string;
+}
+
+export const RECEIPT_FONTS: ReceiptFontOption[] = [
+  {
+    id: 'DEFAULT',
+    name: 'Default (JetBrains Mono)',
+    category: 'DEFAULT',
+    fontFamilyCss: '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace',
+    className: 'font-receipt-default',
+    description: 'Font default bawaan struk thermal, sangat tajam, presisi, dan mudah dibaca.',
+    sampleText: '12345 TOTAL Rp 50.000',
+  },
+  {
+    id: 'EAS',
+    name: 'EAS Font Pack (Share Tech Mono)',
+    category: 'EAS',
+    fontFamilyCss: '"Share Tech Mono", ui-monospace, monospace',
+    className: 'font-receipt-eas',
+    description: 'Karakteristik khas Emergency Alert System (EAS) & radio cuaca dengan sudut tajam industrial.',
+    sampleText: 'EMERGENCY ALERT TOTAL Rp 50.000',
+  },
+  {
+    id: 'RETRO_TERMINAL',
+    name: 'Retro Terminal / CRT (VT323)',
+    category: 'EAS',
+    fontFamilyCss: '"VT323", monospace',
+    className: 'font-receipt-retro',
+    description: 'Gaya layar terminal vintage 8-bit & monitor amber/hijau retro POS.',
+    sampleText: '8-BIT POS TERMINAL 50.000',
+  },
+  {
+    id: 'DOT_MATRIX',
+    name: 'Dot Matrix 9-Pin (DotGothic16)',
+    category: 'DOT MATRIX',
+    fontFamilyCss: '"DotGothic16", monospace',
+    className: 'font-receipt-dotmatrix',
+    description: 'Tekstur titik jarum pita printer kasir minimarket asli (Epson/Star POS).',
+    sampleText: 'DOT MATRIX POS 50.000',
+  },
+  {
+    id: 'SPACE_MONO',
+    name: 'Space Mono (Mechanical POS)',
+    category: 'CLASSIC',
+    fontFamilyCss: '"Space Mono", monospace',
+    className: 'font-receipt-spacemono',
+    description: 'Huruf mekanikal retro futuristik dengan gaya geometric monospace.',
+    sampleText: 'MECHANICAL 12345 Rp 50.000',
+  },
+  {
+    id: 'COURIER',
+    name: 'Courier Prime (Mesin Tik Kasir)',
+    category: 'CLASSIC',
+    fontFamilyCss: '"Courier Prime", "Courier New", Courier, monospace',
+    className: 'font-receipt-courier',
+    description: 'Gaya register kasir mesin tik manual klasik & nota vintage tradisional.',
+    sampleText: 'TYPEWRITER CASH Rp 50.000',
+  },
+  {
+    id: 'INCONSOLATA',
+    name: 'Inconsolata (Compact POS)',
+    category: 'CLASSIC',
+    fontFamilyCss: '"Inconsolata", monospace',
+    className: 'font-receipt-inconsolata',
+    description: 'Monospace ramping dan hemat ruang kertas untuk struk panjang.',
+    sampleText: 'COMPACT POS 12345 Rp 50.000',
+  },
+  {
+    id: 'ROBOTO_MONO',
+    name: 'Roboto Mono',
+    category: 'CLASSIC',
+    fontFamilyCss: '"Roboto Mono", monospace',
+    className: 'font-receipt-robotomono',
+    description: 'Monospace standar modern dengan proporsi angka yang seimbang.',
+    sampleText: 'ROBOTO MONO 12345 Rp 50.000',
+  },
+  {
+    id: 'MODERN_SANS',
+    name: 'Modern Clean Sans (Jakarta)',
+    category: 'MODERN',
+    fontFamilyCss: '"Plus Jakarta Sans", "Inter", system-ui, sans-serif',
+    className: 'font-receipt-modern',
+    description: 'Gaya kafe modern, butik, dan invoice digital kekinian yang rapi.',
+    sampleText: 'Modern Cafe Receipt Rp 50.000',
+  },
+];
+
+export function getFontFamilyCss(fontId?: ReceiptFontFamily): string {
+  const found = RECEIPT_FONTS.find((f) => f.id === fontId);
+  return found ? found.fontFamilyCss : RECEIPT_FONTS[0].fontFamilyCss;
+}
+
+export function getFontClassName(fontId?: ReceiptFontFamily): string {
+  const found = RECEIPT_FONTS.find((f) => f.id === fontId);
+  return found ? found.className : RECEIPT_FONTS[0].className;
+}
 
 /**
  * Formats a number into a currency string (defaulting to Indonesian Rupiah)

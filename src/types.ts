@@ -6,6 +6,16 @@
 export type PaymentMethod = 'CASH' | 'DEBIT' | 'CREDIT' | 'QRIS' | 'E-WALLET';
 export type PaymentStatus = 'SUDAH_LUNAS' | 'BELUM_LUNAS' | 'HUTANG';
 export type CodeDisplayType = 'QR' | 'BARCODE' | 'BOTH' | 'NONE';
+export type ReceiptFontFamily = 
+  | 'DEFAULT'          // JetBrains Mono (Thermal Standard)
+  | 'EAS'              // Share Tech Mono (EAS Font Pack / Alert System)
+  | 'RETRO_TERMINAL'   // VT323 (Retro 8-bit / EAS Terminal)
+  | 'DOT_MATRIX'       // DotGothic16 (Dot Matrix 9-pin POS)
+  | 'SPACE_MONO'       // Space Mono (Mechanical Retro)
+  | 'COURIER'          // Courier Prime (Classic Cash Register)
+  | 'INCONSOLATA'      // Inconsolata (Clean Compact POS)
+  | 'ROBOTO_MONO'      // Roboto Mono (Modern Monospace)
+  | 'MODERN_SANS';     // Plus Jakarta Sans (Modern Clean Retail)
 
 export interface Item {
   id: string;
@@ -22,6 +32,7 @@ export interface Receipt {
   storePhone: string;
   storeWebsite: string;
   cashierName: string;
+  customerName?: string;
   transactionId: string;
   dateTime: string;
   items: Item[];
@@ -46,6 +57,7 @@ export interface Receipt {
   qrSize?: number;
   barcodeValue?: string;
   showBarcodeNumber?: boolean;
+  fontFamily?: ReceiptFontFamily;
 }
 
 export interface StoreProfile {
@@ -54,6 +66,7 @@ export interface StoreProfile {
   storePhone: string;
   storeWebsite: string;
   cashierName: string;
+  customerName?: string;
   taxRate: number;
   discountRate: number;
   discountType: 'PERCENT' | 'FIXED';
@@ -69,4 +82,5 @@ export interface StoreProfile {
   qrSize?: number;
   barcodeValue?: string;
   showBarcodeNumber?: boolean;
+  fontFamily?: ReceiptFontFamily;
 }

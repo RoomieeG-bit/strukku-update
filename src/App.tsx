@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod } from './types';
+import { Receipt, Item } from './types';
 import { generateTransactionId, calculateTotals } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
@@ -49,7 +49,11 @@ export default function App() {
     const stored = localStorage.getItem('strukku_history');
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          // Filter out any temporary seed transactions if they exist
+          return parsed.filter((item: any) => !item.id?.startsWith('seed-tx-'));
+        }
       } catch (e) {
         console.error('Error parsing local storage history:', e);
       }
@@ -91,6 +95,7 @@ export default function App() {
       changeAmount: 50000 - total,
       notesHeader: 'PT. SENJA ABADI INTERNASIONAL',
       notesFooter: 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nWiFi: senjagratis / pwd: kopi\nLAYANAN PELANGGAN: 0812-XXXX-XXXX',
+      fontFamily: 'DEFAULT',
       codeDisplayType: 'BOTH',
       qrValue: 'https://www.kopisenjaabadi.com/struk/verify',
       qrLabel: 'Scan untuk verifikasi struk asli',
@@ -238,7 +243,7 @@ export default function App() {
           <nav className="flex bg-slate-100 p-1 rounded-xl gap-0.5">
             <button
               onClick={() => setActiveView('generator')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeView === 'generator'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -250,7 +255,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveView('history')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition relative ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative ${
                 activeView === 'history'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -269,7 +274,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveView('dashboard')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeView === 'dashboard'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
@@ -313,6 +318,7 @@ export default function App() {
               <ReceiptPreview
                 receipt={receipt}
                 currencySymbol={currencySymbol}
+                onUpdateReceipt={(updated) => setReceipt((prev) => ({ ...prev, ...updated }))}
               />
             </div>
 

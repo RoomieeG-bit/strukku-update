@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=DotGothic16&family=Inconsolata:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Roboto+Mono:wght@400;500;600;700&family=Share+Tech+Mono&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=VT323&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -9,6 +9,45 @@
 
 body {
   background-color: #F1F5F9;
+}
+
+.font-receipt-default {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+.font-receipt-eas {
+  font-family: 'Share Tech Mono', ui-monospace, monospace;
+}
+
+.font-receipt-retro {
+  font-family: 'VT323', monospace;
+  font-size: 1.15em;
+  letter-spacing: 0.05em;
+}
+
+.font-receipt-dotmatrix {
+  font-family: 'DotGothic16', monospace;
+  letter-spacing: 0.02em;
+}
+
+.font-receipt-spacemono {
+  font-family: 'Space Mono', monospace;
+}
+
+.font-receipt-courier {
+  font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+}
+
+.font-receipt-inconsolata {
+  font-family: 'Inconsolata', monospace;
+}
+
+.font-receipt-robotomono {
+  font-family: 'Roboto Mono', monospace;
+}
+
+.font-receipt-modern {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
 }
 
 @layer utilities {

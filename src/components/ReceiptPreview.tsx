@@ -4,8 +4,8 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { Receipt } from '../types';
-import { formatCurrency, formatDateTime } from '../utils';
+import { Receipt, ReceiptFontFamily } from '../types';
+import { formatCurrency, formatDateTime, RECEIPT_FONTS, getFontFamilyCss } from '../utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,7 +17,8 @@ import {
   Check, 
   Copy,
   Info,
-  QrCode
+  QrCode,
+  Type
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -267,9 +268,10 @@ const resolveOklchStylesInClone = (clonedDoc: Document, clonedElement: HTMLEleme
 interface ReceiptPreviewProps {
   receipt: Receipt;
   currencySymbol: string;
+  onUpdateReceipt?: (updated: Partial<Receipt>) => void;
 }
 
-export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPreviewProps) {
+export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceipt }: ReceiptPreviewProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [copiedTx, setCopiedTx] = useState(false);
@@ -475,7 +477,7 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
   return (
     <div className="flex flex-col h-full gap-4" id="receipt-preview-panel">
       {/* Control Actions Header */}
-      <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 shadow-sm shrink-0">
+      <div className="bg-slate-900 text-white p-3.5 sm:p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-slate-800 text-slate-300 rounded-lg">
             <Printer className="w-4 h-4" />
@@ -486,48 +488,80 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            title="Cetak via Printer Thermal / PDF"
-            id="print-action"
-          >
-            <Printer className="w-3.5 h-3.5" /> Cetak
-          </button>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+          {/* Quick Font Selector Dropdown */}
+          {onUpdateReceipt && (
+            <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-slate-300">
+              <Type className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <select
+                value={receipt.fontFamily || 'DEFAULT'}
+                onChange={(e) => onUpdateReceipt({ fontFamily: e.target.value as ReceiptFontFamily })}
+                className="bg-transparent text-white font-medium text-[11px] outline-none cursor-pointer pr-1"
+                title="Pilih jenis font struk"
+                id="quick-font-selector"
+              >
+                <optgroup label="⚡ EAS & Retro Alert">
+                  <option value="EAS" className="bg-slate-900 text-white">EAS Font Pack (Share Tech)</option>
+                  <option value="RETRO_TERMINAL" className="bg-slate-900 text-white">Retro Terminal / EAS 8-Bit (VT323)</option>
+                </optgroup>
+                <optgroup label="🖨️ POS & Minimarket">
+                  <option value="DEFAULT" className="bg-slate-900 text-white">Default (JetBrains Mono)</option>
+                  <option value="DOT_MATRIX" className="bg-slate-900 text-white">Dot Matrix 9-Pin (DotGothic16)</option>
+                  <option value="SPACE_MONO" className="bg-slate-900 text-white">Space Mono (Mechanical POS)</option>
+                  <option value="COURIER" className="bg-slate-900 text-white">Courier Prime (Mesin Tik Kasir)</option>
+                  <option value="INCONSOLATA" className="bg-slate-900 text-white">Inconsolata (Compact POS)</option>
+                  <option value="ROBOTO_MONO" className="bg-slate-900 text-white">Roboto Mono</option>
+                </optgroup>
+                <optgroup label="☕ Modern Clean">
+                  <option value="MODERN_SANS" className="bg-slate-900 text-white">Modern Clean Sans (Jakarta)</option>
+                </optgroup>
+              </select>
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={exporting !== null}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            id="export-pdf-action"
-          >
-            <Download className="w-3.5 h-3.5" /> PDF
-          </button>
+          <div className="flex gap-1.5 ml-auto sm:ml-0">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+              title="Cetak via Printer Thermal / PDF"
+              id="print-action"
+            >
+              <Printer className="w-3.5 h-3.5" /> Cetak
+            </button>
 
-          <button
-            type="button"
-            onClick={handleExportJPG}
-            disabled={exporting !== null}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            id="export-jpg-action"
-            title="Unduh struk format JPG berkualitas tinggi"
-          >
-            <ImageIcon className="w-3.5 h-3.5" /> JPG
-          </button>
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={exporting !== null}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              id="export-pdf-action"
+            >
+              <Download className="w-3.5 h-3.5" /> PDF
+            </button>
 
-          <button
-            type="button"
-            onClick={handleExportPNG}
-            disabled={exporting !== null}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            id="export-png-action"
-            title="Unduh struk format PNG latar transparan/putih"
-          >
-            <ImageIcon className="w-3.5 h-3.5" /> PNG
-          </button>
+            <button
+              type="button"
+              onClick={handleExportJPG}
+              disabled={exporting !== null}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              id="export-jpg-action"
+              title="Unduh struk format JPG"
+            >
+              <ImageIcon className="w-3.5 h-3.5" /> JPG
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPNG}
+              disabled={exporting !== null}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              id="export-png-action"
+              title="Unduh struk format PNG latar transparan/putih"
+            >
+              <ImageIcon className="w-3.5 h-3.5" /> PNG
+            </button>
+          </div>
         </div>
       </div>
 
@@ -544,8 +578,8 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
         <div 
           ref={receiptRef}
           id="receipt-print-area"
-          className="receipt-paper w-full max-w-[340px] px-6 py-8 font-mono text-[11px] leading-relaxed text-black shadow-lg flex flex-col animate-fadeIn relative overflow-hidden"
-          style={{ fontFamily: '"JetBrains Mono", "Courier New", Courier, monospace' }}
+          className="receipt-paper w-full max-w-[340px] px-6 py-8 text-[11px] leading-relaxed text-black shadow-lg flex flex-col animate-fadeIn relative overflow-hidden transition-all duration-150"
+          style={{ fontFamily: getFontFamilyCss(receipt.fontFamily) }}
         >
           {/* Watermark / Status Stamp Overlay */}
           {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG'].includes(receipt.paymentStatus) && (
@@ -693,6 +727,12 @@ export default function ReceiptPreview({ receipt, currencySymbol }: ReceiptPrevi
               <span>Kasir:</span>
               <span>{receipt.cashierName || 'Kasir Default'}</span>
             </div>
+            {receipt.customerName && (
+              <div className="flex justify-between">
+                <span>Pelanggan:</span>
+                <span className="font-semibold">{receipt.customerName}</span>
+              </div>
+            )}
           </div>
 
           {/* Middle Divider */}
