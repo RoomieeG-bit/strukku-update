@@ -265,6 +265,94 @@ const resolveOklchStylesInClone = (clonedDoc: Document, clonedElement: HTMLEleme
   traverse(clonedElement);
 };
 
+// Robust helper to capture receipt with exact active fonts, colors, and crisp scale
+const captureReceiptCanvas = async (element: HTMLElement, receipt: Receipt): Promise<HTMLCanvasElement> => {
+  // 1. Ensure all document fonts are fully loaded before rendering to canvas
+  if (document.fonts) {
+    try {
+      await document.fonts.ready;
+      const activeFontCss = getFontFamilyCss(receipt.fontFamily);
+      const primaryFont = activeFontCss.split(',')[0].replace(/["']/g, '').trim();
+      if (primaryFont) {
+        await Promise.allSettled([
+          document.fonts.load(`10px "${primaryFont}"`),
+          document.fonts.load(`bold 10px "${primaryFont}"`),
+          document.fonts.load(`11px "${primaryFont}"`),
+          document.fonts.load(`bold 11px "${primaryFont}"`),
+          document.fonts.load(`14px "${primaryFont}"`),
+          document.fonts.load(`bold 14px "${primaryFont}"`),
+          document.fonts.load(`16px "${primaryFont}"`),
+          document.fonts.load(`bold 16px "${primaryFont}"`),
+          document.fonts.load(`28px "${primaryFont}"`),
+          document.fonts.load(`bold 28px "${primaryFont}"`),
+          document.fonts.load(`34px "${primaryFont}"`),
+          document.fonts.load(`900 34px "${primaryFont}"`),
+        ]);
+      }
+      await document.fonts.ready;
+    } catch (e) {
+      console.warn('Font preload warning:', e);
+    }
+  }
+
+  const activeFontCss = getFontFamilyCss(receipt.fontFamily);
+
+  return await html2canvas(element, {
+    scale: 3, // Crisp 3x HD scale for ultra-clear typography
+    useCORS: true,
+    backgroundColor: '#ffffff', // Solid white backdrop
+    logging: false,
+    onclone: (clonedDoc, clonedElement) => {
+      // A. Transfer loaded FontFace instances directly to the cloned iframe document
+      if ('fonts' in document && 'fonts' in clonedDoc) {
+        try {
+          document.fonts.forEach((fontFace) => {
+            try {
+              (clonedDoc as any).fonts.add(fontFace);
+            } catch (err) {}
+          });
+        } catch (err) {}
+      }
+
+      // B. Copy all link stylesheet elements and style tags to clonedDoc head
+      const headLinksAndStyles = document.querySelectorAll('link[rel="stylesheet"], link[rel="preconnect"], style');
+      headLinksAndStyles.forEach((el) => {
+        try {
+          clonedDoc.head.appendChild(el.cloneNode(true));
+        } catch (e) {}
+      });
+
+      // C. Inject explicit font import and mandatory override CSS into clonedDoc head
+      const fontOverride = clonedDoc.createElement('style');
+      fontOverride.id = 'export-font-override';
+      fontOverride.textContent = `
+        @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=DotGothic16&family=Inconsolata:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Roboto+Mono:wght@400;500;600;700&family=Share+Tech+Mono&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=VT323&display=swap');
+
+        .receipt-paper, #receipt-print-area {
+          font-family: ${activeFontCss} !important;
+        }
+        #receipt-print-area *:not(svg):not(path):not(rect):not(circle):not(tspan) {
+          font-family: inherit !important;
+        }
+      `;
+      clonedDoc.head.appendChild(fontOverride);
+
+      // D. Enforce font family on root cloned element
+      (clonedElement as HTMLElement).style.fontFamily = activeFontCss;
+
+      // E. Update SVG text for watermark status stamp
+      const watermarkTexts = (clonedElement as HTMLElement).querySelectorAll('#receipt-status-watermark text');
+      watermarkTexts.forEach((txt) => {
+        txt.setAttribute('font-family', activeFontCss);
+        (txt as HTMLElement).style.fontFamily = activeFontCss;
+      });
+
+      // F. Resolve OKLCH colors
+      resolveOklchStylesInClone(clonedDoc, clonedElement as HTMLElement);
+    },
+  });
+};
+
 interface ReceiptPreviewProps {
   receipt: Receipt;
   currencySymbol: string;
@@ -291,19 +379,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
       setExporting('PNG');
       restoreStyles = await prepareStylesheets();
       
-      // Select the element to capture
-      const element = receiptRef.current;
-      
-      // Crisp 3x scale for HD print-ready text quality
-      const canvas = await html2canvas(element, {
-        scale: 3, 
-        useCORS: true,
-        backgroundColor: '#ffffff', // solid white backdrop for clean output
-        logging: false,
-        onclone: (clonedDoc, clonedElement) => {
-          resolveOklchStylesInClone(clonedDoc, clonedElement as HTMLElement);
-        }
-      });
+      const canvas = await captureReceiptCanvas(receiptRef.current, receipt);
       
       const link = document.createElement('a');
       link.download = `Struk-${receipt.storeName.replace(/\s+/g, '_')}-${receipt.transactionId.replace(/[\/\s:]/g, '-')}.png`;
@@ -327,19 +403,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
       setExporting('JPG');
       restoreStyles = await prepareStylesheets();
       
-      // Select the element to capture
-      const element = receiptRef.current;
-      
-      // Crisp 3x scale for HD print-ready text quality
-      const canvas = await html2canvas(element, {
-        scale: 3, 
-        useCORS: true,
-        backgroundColor: '#ffffff', // solid white backdrop for clean JPEG
-        logging: false,
-        onclone: (clonedDoc, clonedElement) => {
-          resolveOklchStylesInClone(clonedDoc, clonedElement as HTMLElement);
-        }
-      });
+      const canvas = await captureReceiptCanvas(receiptRef.current, receipt);
       
       const link = document.createElement('a');
       link.download = `Struk-${receipt.storeName.replace(/\s+/g, '_')}-${receipt.transactionId.replace(/[\/\s:]/g, '-')}.jpg`;
@@ -363,17 +427,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
       setExporting('PDF');
       restoreStyles = await prepareStylesheets();
       
-      const element = receiptRef.current;
-
-      const canvas = await html2canvas(element, {
-        scale: 3, // High scale for text clarity inside PDF
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc, clonedElement) => {
-          resolveOklchStylesInClone(clonedDoc, clonedElement as HTMLElement);
-        }
-      });
+      const canvas = await captureReceiptCanvas(receiptRef.current, receipt);
 
       const imgData = canvas.toDataURL('image/png');
       
@@ -631,7 +685,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                     fill="currentColor" 
                     fontSize={receipt.paymentStatus === 'BELUM_LUNAS' ? '26' : '34'} 
                     fontWeight="900" 
-                    fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                    fontFamily={getFontFamilyCss(receipt.fontFamily)}
                     textAnchor="middle" 
                     dominantBaseline="central" 
                     letterSpacing="3.5"
