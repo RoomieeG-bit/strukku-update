@@ -61,6 +61,7 @@ body {
       margin: 0;
       padding: 0;
       background: #ffffff;
+      width: 100%;
     }
     body * {
       visibility: hidden;
@@ -73,10 +74,7 @@ body {
       left: 50%;
       top: 0;
       transform: translateX(-50%);
-      width: 80mm; /* standard receipt width */
-      max-width: 80mm;
       margin: 0;
-      padding: 5mm;
       box-shadow: none;
       background: #ffffff !important;
       color: #000000 !important;

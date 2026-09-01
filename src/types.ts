@@ -17,6 +17,8 @@ export type ReceiptFontFamily =
   | 'ROBOTO_MONO'      // Roboto Mono (Modern Monospace)
   | 'MODERN_SANS';     // Plus Jakarta Sans (Modern Clean Retail)
 
+export type ReceiptPaperSizePreset = '58mm' | '80mm' | '76mm' | '100mm' | 'CUSTOM';
+
 export interface Item {
   id: string;
   name: string;
@@ -58,6 +60,8 @@ export interface Receipt {
   barcodeValue?: string;
   showBarcodeNumber?: boolean;
   fontFamily?: ReceiptFontFamily;
+  paperWidthMm?: number; // Thermal receipt width in millimeters (e.g., 58, 80, 76, 100, or custom)
+  paperSizePreset?: ReceiptPaperSizePreset;
 }
 
 export interface StoreProfile {
@@ -83,4 +87,6 @@ export interface StoreProfile {
   barcodeValue?: string;
   showBarcodeNumber?: boolean;
   fontFamily?: ReceiptFontFamily;
+  paperWidthMm?: number;
+  paperSizePreset?: ReceiptPaperSizePreset;
 }

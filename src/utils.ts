@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Item, ReceiptFontFamily } from './types';
+import { Item, ReceiptFontFamily, ReceiptPaperSizePreset } from './types';
 
 export interface ReceiptFontOption {
   id: ReceiptFontFamily;
@@ -13,6 +13,69 @@ export interface ReceiptFontOption {
   className: string;
   description: string;
   sampleText: string;
+}
+
+export interface PaperSizeOption {
+  id: ReceiptPaperSizePreset;
+  name: string;
+  widthMm: number;
+  description: string;
+  tag: string;
+  printableChars: string;
+}
+
+export const PAPER_SIZE_OPTIONS: PaperSizeOption[] = [
+  {
+    id: '58mm',
+    name: '58 mm (Mini Bluetooth / EDC)',
+    widthMm: 58,
+    description: 'Printer bluetooth portable, EDC perbankan, kasir mobile Moka/GoBiz/GrabFood.',
+    tag: '58mm Mini',
+    printableChars: '~32 karakter per baris',
+  },
+  {
+    id: '80mm',
+    name: '80 mm (Standar Desktop Kasir)',
+    widthMm: 80,
+    description: 'Ukuran standar minimarket (Indomaret/Alfamart), restoran & swalayan (Epson TM-T82).',
+    tag: '80mm Standar',
+    printableChars: '~48 karakter per baris',
+  },
+  {
+    id: '76mm',
+    name: '76 mm (Dot Matrix / Pita Jarum)',
+    widthMm: 76,
+    description: 'Printer pita dot-matrix kertas rangkap / NCR kasir konvensional (Epson TM-U220).',
+    tag: '76mm Matrix',
+    printableChars: '~40 karakter per baris',
+  },
+  {
+    id: '100mm',
+    name: '100 mm (Struk Lebar & Faktur)',
+    widthMm: 100,
+    description: 'Faktur penjualan lengkap, invoice toko grosir, atau label pengiriman ekspedisi.',
+    tag: '100mm Lebar',
+    printableChars: '~60+ karakter per baris',
+  },
+  {
+    id: 'CUSTOM',
+    name: 'Kustom mm (Bebas Atur)',
+    widthMm: 80,
+    description: 'Atur lebar kertas spesifik (40 mm s/d 210 mm) sesuai ukuran printer thermal Anda.',
+    tag: 'Kustom mm',
+    printableChars: 'Fleksibel',
+  },
+];
+
+export function getPaperWidthMm(preset?: ReceiptPaperSizePreset, customMm?: number): number {
+  if (customMm && customMm >= 40 && customMm <= 250) {
+    return customMm;
+  }
+  if (preset && preset !== 'CUSTOM') {
+    const found = PAPER_SIZE_OPTIONS.find((p) => p.id === preset);
+    if (found) return found.widthMm;
+  }
+  return 80; // default standard 80mm
 }
 
 export const RECEIPT_FONTS: ReceiptFontOption[] = [

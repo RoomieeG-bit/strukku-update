@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS } from '../utils';
+import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset } from '../types';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   Store, 
@@ -13,6 +13,7 @@ import {
   Hash, 
   Calendar, 
   Plus, 
+  Minus,
   Trash2, 
   Percent, 
   DollarSign, 
@@ -41,7 +42,9 @@ import {
   RotateCcw,
   Zap,
   CheckCircle2,
-  Info
+  Info,
+  Maximize2,
+  Printer
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -174,7 +177,7 @@ export default function ReceiptForm({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemDiscount, setNewItemDiscount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'fonts' | 'code' | 'templates'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'size' | 'fonts' | 'code' | 'templates'>('store');
   const [fontCategoryFilter, setFontCategoryFilter] = useState<string>('ALL');
   const [customFontSampleText, setCustomFontSampleText] = useState<string>('');
   const [copiedQrContent, setCopiedQrContent] = useState(false);
@@ -410,6 +413,24 @@ export default function ReceiptForm({
           <Percent className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden md:inline">Pembayaran & Pajak</span>
           <span className="md:hidden">Bayar</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('size')}
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'size'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+          }`}
+          id="tab-receipt-size"
+        >
+          <Maximize2 className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+          <span className="hidden md:inline">Ukuran Kertas</span>
+          <span className="md:hidden">Ukuran</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono ${
+            activeTab === 'size' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-800'
+          }`}>
+            {getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)}mm
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('fonts')}
@@ -692,6 +713,52 @@ export default function ReceiptForm({
                     <Clock className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Quick Paper Size Selector in Store Tab */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <Maximize2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Ukuran Lebar Kertas Struk
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('size')}
+                  className="text-[11px] text-indigo-600 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                >
+                  Konfigurasi Lengkap →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {PAPER_SIZE_OPTIONS.map((opt) => {
+                  const isSelected = (receipt.paperSizePreset || '80mm') === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        if (opt.id === 'CUSTOM') {
+                          setActiveTab('size');
+                        } else {
+                          handleRecalculate({
+                            paperSizePreset: opt.id,
+                            paperWidthMm: opt.widthMm,
+                          });
+                        }
+                      }}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-bold border transition text-center cursor-pointer ${
+                        isSelected
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xs'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {opt.id === 'CUSTOM' ? `Custom (${getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)}mm)` : `${opt.name}`}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1142,6 +1209,269 @@ export default function ReceiptForm({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: UKURAN KERTAS & THERMAL PRINTER CONFIGURATION */}
+        {activeTab === 'size' && (
+          <div className="space-y-5" id="form-section-paper-size">
+            {/* Header Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-700/60 text-indigo-300 text-[10px] font-bold">
+                  <Printer className="w-3 h-3" />
+                  <span>Kompatibilitas Thermal Printer & Ukuran Kertas</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-extrabold font-display text-white">
+                  Ukuran Lebar Kertas Struk
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Sesuaikan lebar kertas untuk printer bluetooth portable (58mm), printer kasir desktop standar (80mm), dot matrix (76mm), atau ukuran custom.
+                </p>
+              </div>
+
+              <div className="bg-slate-800/90 border border-indigo-500/30 p-3 rounded-xl flex items-center gap-3 shrink-0">
+                <div className="w-3 h-3 rounded-full bg-indigo-400 animate-pulse shrink-0"></div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Ukuran Aktif:</div>
+                  <div className="text-sm font-black font-mono text-white">
+                    {getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)} mm
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Standard Preset Cards */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Pilih Preset Ukuran Kertas Thermal:
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {PAPER_SIZE_OPTIONS.map((preset) => {
+                  const isActive = (receipt.paperSizePreset || '80mm') === preset.id;
+                  const currentWidth = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
+
+                  return (
+                    <div
+                      key={preset.id}
+                      onClick={() => {
+                        if (preset.id === 'CUSTOM') {
+                          handleRecalculate({
+                            paperSizePreset: 'CUSTOM',
+                            paperWidthMm: receipt.paperWidthMm || 80,
+                          });
+                        } else {
+                          handleRecalculate({
+                            paperSizePreset: preset.id,
+                            paperWidthMm: preset.widthMm,
+                          });
+                        }
+                      }}
+                      className={`p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between relative ${
+                        isActive
+                          ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-600/10 shadow-xs'
+                          : 'border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/60'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className={`p-1.5 rounded-lg ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                              <Maximize2 className="w-4 h-4" />
+                            </div>
+                            <span className="text-xs font-bold text-slate-900">{preset.name}</span>
+                          </div>
+                          {isActive && (
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-slate-600 leading-relaxed mb-3">
+                          {preset.description}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 font-medium">Lebar Fisik:</span>
+                        <span className="font-mono font-bold text-slate-800">
+                          {preset.id === 'CUSTOM' ? `${currentWidth} mm` : `${preset.widthMm} mm`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Millimeter Adjuster (Interactive Slider & Inputs) */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-slate-200">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-indigo-600" />
+                    Penyesuaian Lebar Kustom (Milimeter)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Bebas atur lebar struk sesuai gulungan kertas dan batas margin printer Anda (40 mm - 210 mm).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-indigo-700 bg-indigo-100/70 px-2.5 py-1 rounded-lg border border-indigo-200">
+                    {getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)} mm (~{Math.round(getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm) * 4.375)}px)
+                  </span>
+                </div>
+              </div>
+
+              {/* Slider */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-slate-600 font-semibold">
+                  <span>Geser untuk mengubah lebar:</span>
+                  <span className="font-mono text-indigo-600">{getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)} mm</span>
+                </div>
+                <input
+                  type="range"
+                  id="tab-custom-paper-width-slider"
+                  min="40"
+                  max="150"
+                  step="1"
+                  value={getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    handleRecalculate({
+                      paperSizePreset: 'CUSTOM',
+                      paperWidthMm: val,
+                    });
+                  }}
+                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <span>40 mm (Mini)</span>
+                  <span>58 mm (Bluetooth)</span>
+                  <span>80 mm (Standar)</span>
+                  <span>100 mm (Lebar)</span>
+                  <span>150 mm</span>
+                </div>
+              </div>
+
+              {/* Quick Stepper Buttons & Manual Input */}
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
+                    handleRecalculate({
+                      paperSizePreset: 'CUSTOM',
+                      paperWidthMm: Math.max(40, cur - 5),
+                    });
+                  }}
+                  className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                >
+                  <Minus className="w-3.5 h-3.5" /> -5mm
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
+                    handleRecalculate({
+                      paperSizePreset: 'CUSTOM',
+                      paperWidthMm: Math.max(40, cur - 1),
+                    });
+                  }}
+                  className="px-2.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                >
+                  -1mm
+                </button>
+
+                <div className="relative flex-1 min-w-[120px]">
+                  <input
+                    type="number"
+                    min="30"
+                    max="220"
+                    value={getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm)}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val >= 30 && val <= 250) {
+                        handleRecalculate({
+                          paperSizePreset: 'CUSTOM',
+                          paperWidthMm: val,
+                        });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-center font-mono font-bold text-sm bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none shadow-2xs"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none font-bold">mm</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
+                    handleRecalculate({
+                      paperSizePreset: 'CUSTOM',
+                      paperWidthMm: Math.min(210, cur + 1),
+                    });
+                  }}
+                  className="px-2.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                >
+                  +1mm
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = getPaperWidthMm(receipt.paperSizePreset, receipt.paperWidthMm);
+                    handleRecalculate({
+                      paperSizePreset: 'CUSTOM',
+                      paperWidthMm: Math.min(210, cur + 5),
+                    });
+                  }}
+                  className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" /> +5mm
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRecalculate({
+                      paperSizePreset: '80mm',
+                      paperWidthMm: 80,
+                    });
+                  }}
+                  className="px-3 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-xs font-bold text-slate-700 transition cursor-pointer"
+                  title="Kembalikan ke standar 80mm"
+                >
+                  Reset (80mm)
+                </button>
+              </div>
+            </div>
+
+            {/* Thermal Print Setup Guide & Best Practices */}
+            <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-xl space-y-2.5">
+              <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                <Printer className="w-4 h-4 text-amber-700" />
+                <span>Panduan Cetak Thermal Bebas Potong Margin:</span>
+              </div>
+              <ul className="text-[11px] text-amber-900/90 space-y-1.5 list-disc list-inside leading-relaxed">
+                <li>
+                  <strong>Margins / Batas Halaman:</strong> Pada jendela cetak (Ctrl+P), selalu atur <strong>Margins: None (Tanpa Margin)</strong> agar teks tidak terpotong di tepi kertas roll.
+                </li>
+                <li>
+                  <strong>Background Graphics:</strong> Centang opsi <em>Background Graphics</em> agar watermark, stempel lunas, dan pembatas garis tercetak sempurna.
+                </li>
+                <li>
+                  <strong>Printer 58mm Portable:</strong> Untuk printer 58mm (Moka, GoBiz, Zjiang), disarankan menggunakan font monospaced yang padat seperti <em>Default (JetBrains Mono)</em> atau <em>Dot Matrix</em>.
+                </li>
+                <li>
+                  <strong>Ekspor PDF & Gambar:</strong> File PDF dan gambar yang diunduh otomatis dipotong pas sesuai milimeter ukuran yang Anda pilih di atas.
+                </li>
+              </ul>
             </div>
           </div>
         )}
