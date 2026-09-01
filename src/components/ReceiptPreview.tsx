@@ -581,18 +581,65 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           className="receipt-paper w-full max-w-[340px] px-6 py-8 text-[11px] leading-relaxed text-black shadow-lg flex flex-col animate-fadeIn relative overflow-hidden transition-all duration-150"
           style={{ fontFamily: getFontFamilyCss(receipt.fontFamily) }}
         >
-          {/* Watermark / Status Stamp Overlay */}
+          {/* Watermark / Status Stamp Overlay (Natural -18° angle with robust SVG rendering for PNG/JPG/PDF exports) */}
           {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG'].includes(receipt.paymentStatus) && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none opacity-[0.14] z-0">
-              <div className={`text-[34px] font-black border-[4px] px-3 py-1.5 uppercase tracking-[0.15em] rotate-[-15deg] whitespace-nowrap ${
-                receipt.paymentStatus === 'SUDAH_LUNAS' 
-                  ? 'text-green-700 border-green-700' 
-                  : receipt.paymentStatus === 'BELUM_LUNAS' 
-                    ? 'text-red-700 border-red-700' 
-                    : 'text-amber-600 border-amber-600'
-              }`}>
-                {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' : 'HUTANG'}
-              </div>
+            <div 
+              className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none z-0"
+              style={{ opacity: 0.18 }}
+              id="receipt-status-watermark"
+            >
+              <svg 
+                viewBox="0 0 320 200" 
+                className="w-72 h-44 overflow-visible"
+                style={{
+                  color: receipt.paymentStatus === 'SUDAH_LUNAS' 
+                    ? '#15803d' 
+                    : receipt.paymentStatus === 'BELUM_LUNAS' 
+                      ? '#b91c1c' 
+                      : '#d97706'
+                }}
+              >
+                <g transform="rotate(-18 160 100)">
+                  {/* Outer Stamp Box with Rounded Corners and Bold Border */}
+                  <rect 
+                    x="20" 
+                    y="62" 
+                    width="280" 
+                    height="76" 
+                    rx="10" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="5" 
+                  />
+                  {/* Inner dashed accent border for authentic rubber stamp effect */}
+                  <rect 
+                    x="27" 
+                    y="69" 
+                    width="266" 
+                    height="62" 
+                    rx="7" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="1.5" 
+                    strokeDasharray="4 2"
+                    opacity="0.6"
+                  />
+                  {/* Stamp Text */}
+                  <text 
+                    x="160" 
+                    y="101" 
+                    fill="currentColor" 
+                    fontSize={receipt.paymentStatus === 'BELUM_LUNAS' ? '26' : '34'} 
+                    fontWeight="900" 
+                    fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                    textAnchor="middle" 
+                    dominantBaseline="central" 
+                    letterSpacing="3.5"
+                  >
+                    {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' : 'HUTANG'}
+                  </text>
+                </g>
+              </svg>
             </div>
           )}
 
