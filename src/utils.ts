@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Item, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition } from './types';
+import { Item, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from './types';
 
 export const DEFAULT_RECEIPT_LABELS: Required<ReceiptLabels> = {
   transactionIdLabel: 'No. Bon:',
@@ -144,11 +144,13 @@ export function getReceiptLabels(labels?: ReceiptLabels): Required<ReceiptLabels
 export interface ReceiptFontOption {
   id: ReceiptFontFamily;
   name: string;
-  category: 'EAS' | 'DEFAULT' | 'DOT MATRIX' | 'CLASSIC' | 'MODERN';
+  category: 'EAS' | 'DEFAULT' | 'DOT MATRIX' | 'CLASSIC' | 'MODERN' | 'CUSTOM' | string;
   fontFamilyCss: string;
   className: string;
   description: string;
   sampleText: string;
+  isCustom?: boolean;
+  customFontData?: CustomImportedFont;
 }
 
 export interface PaperSizeOption {
@@ -158,6 +160,100 @@ export interface PaperSizeOption {
   description: string;
   tag: string;
   printableChars: string;
+}
+
+export const CUSTOM_FONTS_STORAGE_KEY = 'strukku_custom_imported_fonts';
+
+/**
+ * Loads custom imported TTF/OTF fonts from localStorage
+ */
+export function loadCustomFontsFromStorage(): CustomImportedFont[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_FONTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load custom fonts from storage:', e);
+  }
+  return [];
+}
+
+/**
+ * Saves custom imported fonts list to localStorage
+ */
+export function saveCustomFontsToStorage(fonts: CustomImportedFont[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CUSTOM_FONTS_STORAGE_KEY, JSON.stringify(fonts));
+  } catch (e) {
+    console.error('Failed to save custom fonts to storage:', e);
+  }
+}
+
+/**
+ * Dynamically registers custom TTF/OTF fonts into DOM and document.fonts FontFace set
+ */
+export function registerCustomFontsInDocument(fonts: CustomImportedFont[]): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  
+  try {
+    let styleEl = document.getElementById('strukku-custom-fonts-style') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'strukku-custom-fonts-style';
+      document.head.appendChild(styleEl);
+    }
+
+    if (!fonts || fonts.length === 0) {
+      styleEl.textContent = '';
+      return;
+    }
+
+    let cssRules = '';
+    for (const font of fonts) {
+      const formatString = font.format === 'otf' ? 'opentype' : 'truetype';
+      cssRules += `
+@font-face {
+  font-family: "${font.name}";
+  src: url("${font.dataUrl}") format("${formatString}");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "${font.name}";
+  src: url("${font.dataUrl}") format("${formatString}");
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+`;
+      // Also register via FontFace API if supported
+      if ('FontFace' in window && document.fonts) {
+        try {
+          const fontFace = new FontFace(font.name, `url(${font.dataUrl})`, {
+            weight: 'normal',
+            style: 'normal',
+          });
+          fontFace.load().then((loadedFace) => {
+            document.fonts.add(loadedFace);
+          }).catch((err) => {
+            console.warn(`FontFace load warn for ${font.name}:`, err);
+          });
+        } catch (e) {
+          // Ignore FontFace API constructor errors
+        }
+      }
+    }
+
+    styleEl.textContent = cssRules;
+  } catch (err) {
+    console.error('Failed to register custom fonts in document:', err);
+  }
 }
 
 export const PAPER_SIZE_OPTIONS: PaperSizeOption[] = [
@@ -298,14 +394,29 @@ export const RECEIPT_FONTS: ReceiptFontOption[] = [
   },
 ];
 
-export function getFontFamilyCss(fontId?: ReceiptFontFamily): string {
+export function getFontFamilyCss(fontId?: ReceiptFontFamily, customFonts?: CustomImportedFont[]): string {
+  if (!fontId) return RECEIPT_FONTS[0].fontFamilyCss;
   const found = RECEIPT_FONTS.find((f) => f.id === fontId);
-  return found ? found.fontFamilyCss : RECEIPT_FONTS[0].fontFamilyCss;
+  if (found) return found.fontFamilyCss;
+
+  // Search in custom imported fonts
+  const fontsList = customFonts || loadCustomFontsFromStorage();
+  const customFound = fontsList.find((f) => f.id === fontId || f.name === fontId);
+  if (customFound) {
+    return `"${customFound.name}", "JetBrains Mono", ui-monospace, monospace`;
+  }
+
+  // If fontId itself looks like a direct font family name
+  if (fontId && fontId !== 'DEFAULT') {
+    return `"${fontId}", "JetBrains Mono", ui-monospace, monospace`;
+  }
+
+  return RECEIPT_FONTS[0].fontFamilyCss;
 }
 
 export function getFontClassName(fontId?: ReceiptFontFamily): string {
   const found = RECEIPT_FONTS.find((f) => f.id === fontId);
-  return found ? found.className : RECEIPT_FONTS[0].className;
+  return found ? found.className : 'font-receipt-default';
 }
 
 /**

@@ -15,7 +15,18 @@ export type ReceiptFontFamily =
   | 'COURIER'          // Courier Prime (Classic Cash Register)
   | 'INCONSOLATA'      // Inconsolata (Clean Compact POS)
   | 'ROBOTO_MONO'      // Roboto Mono (Modern Monospace)
-  | 'MODERN_SANS';     // Plus Jakarta Sans (Modern Clean Retail)
+  | 'MODERN_SANS'      // Plus Jakarta Sans (Modern Clean Retail)
+  | (string & {});     // Custom imported font ID or name
+
+export interface CustomImportedFont {
+  id: string;
+  name: string;
+  fileName: string;
+  format: 'ttf' | 'otf';
+  dataUrl: string;
+  fileSize: number;
+  createdAt: string;
+}
 
 export type ReceiptPaperSizePreset = '58mm' | '80mm' | '76mm' | '100mm' | 'CUSTOM';
 

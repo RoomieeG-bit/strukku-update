@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Item } from './types';
-import { generateTransactionId, calculateTotals } from './utils';
+import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
 import ReceiptHistory from './components/ReceiptHistory';
@@ -115,6 +115,12 @@ export default function App() {
 
   // Success notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Register imported custom TTF/OTF fonts on initial mount
+  useEffect(() => {
+    const fonts = loadCustomFontsFromStorage();
+    registerCustomFontsInDocument(fonts);
+  }, []);
 
   // Keep currency preference in localStorage
   useEffect(() => {

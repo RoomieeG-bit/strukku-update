@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels } from '../utils';
+import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
   Store, 
@@ -48,7 +48,12 @@ import {
   Tag,
   Bookmark,
   Edit3,
-  HelpCircle
+  HelpCircle,
+  Upload,
+  FileUp,
+  AlertTriangle,
+  FolderUp,
+  FileCheck
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -202,6 +207,126 @@ export default function ReceiptForm({
       return [];
     }
   });
+
+  // Custom Imported Fonts (.ttf / .otf)
+  const [customFonts, setCustomFonts] = useState<CustomImportedFont[]>(() => {
+    return loadCustomFontsFromStorage();
+  });
+  const [fontUploadError, setFontUploadError] = useState<string>('');
+  const [fontUploadSuccess, setFontUploadSuccess] = useState<string>('');
+
+  // Register custom fonts whenever customFonts list changes
+  useEffect(() => {
+    registerCustomFontsInDocument(customFonts);
+  }, [customFonts]);
+
+  // Clear font success message after 4 seconds
+  useEffect(() => {
+    if (fontUploadSuccess) {
+      const timer = setTimeout(() => {
+        setFontUploadSuccess('');
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [fontUploadSuccess]);
+
+  // Clear font error message after 5 seconds
+  useEffect(() => {
+    if (fontUploadError) {
+      const timer = setTimeout(() => {
+        setFontUploadError('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [fontUploadError]);
+
+  // Handle importing custom .ttf or .otf font
+  const handleImportCustomFont = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so same file can be re-selected if needed
+    e.target.value = '';
+    setFontUploadError('');
+    setFontUploadSuccess('');
+
+    // Strict validation: Only .ttf and .otf files accepted
+    const fileName = file.name || '';
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext !== 'ttf' && ext !== 'otf') {
+      setFontUploadError('Format tidak didukung! Fitur "Impor Font Kustom" hanya menerima berkas font berekstensi .ttf dan .otf.');
+      return;
+    }
+
+    // Check file size (cap at 6 MB to avoid memory pressure in localStorage)
+    if (file.size > 6 * 1024 * 1024) {
+      setFontUploadError('Ukuran file font terlalu besar (Maksimal 6 MB). Silakan gunakan font yang telah dioptimasi.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const dataUrl = event.target?.result as string;
+        if (!dataUrl) {
+          setFontUploadError('Gagal membaca data berkas font.');
+          return;
+        }
+
+        // Clean name from filename
+        const rawBaseName = fileName.replace(/\.[^/.]+$/, '').trim();
+        const cleanFontName = rawBaseName.replace(/[^a-zA-Z0-9_\-\s]/g, '').replace(/\s+/g, ' ').trim() || `CustomFont_${Date.now()}`;
+        const fontId = `custom_font_${Date.now()}`;
+
+        const newFont: CustomImportedFont = {
+          id: fontId,
+          name: cleanFontName,
+          fileName: fileName,
+          format: ext as 'ttf' | 'otf',
+          dataUrl,
+          fileSize: file.size,
+          createdAt: new Date().toISOString(),
+        };
+
+        const updatedList = [newFont, ...customFonts.filter(f => f.name.toLowerCase() !== cleanFontName.toLowerCase())];
+        setCustomFonts(updatedList);
+        saveCustomFontsToStorage(updatedList);
+        registerCustomFontsInDocument(updatedList);
+
+        // Automatically activate this newly imported font on current receipt
+        handleRecalculate({ fontFamily: newFont.id });
+        setFontUploadSuccess(`Font kustom "${cleanFontName}" (.${ext.toUpperCase()}) berhasil diimpor dan langsung aktif!`);
+      } catch (err) {
+        console.error('Error processing custom font file:', err);
+        setFontUploadError('Terjadi kesalahan saat memproses berkas font.');
+      }
+    };
+
+    reader.onerror = () => {
+      setFontUploadError('Gagal memproses file font dari perangkat Anda.');
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteCustomFont = (fontId: string, fontName: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(`Hapus font kustom "${fontName}" dari daftar aplikasi?`)) {
+      return;
+    }
+
+    const updatedList = customFonts.filter(f => f.id !== fontId);
+    setCustomFonts(updatedList);
+    saveCustomFontsToStorage(updatedList);
+    registerCustomFontsInDocument(updatedList);
+
+    // If deleted font was active on receipt, fallback to DEFAULT
+    if (receipt.fontFamily === fontId || receipt.fontFamily === fontName) {
+      handleRecalculate({ fontFamily: 'DEFAULT' });
+    }
+
+    setFontUploadSuccess(`Font "${fontName}" telah dihapus.`);
+  };
 
   // Sync custom presets to localStorage
   useEffect(() => {
@@ -1586,7 +1711,7 @@ export default function ReceiptForm({
           </div>
         )}
 
-        {/* TAB 4: UBAH FONT STRUK (EAS FONT PACK, DEFAULT, DOT MATRIX, ETC.) */}
+        {/* TAB 4: UBAH FONT STRUK (EAS FONT PACK, DEFAULT, DOT MATRIX, CUSTOM TTF/OTF, ETC.) */}
         {activeTab === 'fonts' && (
           <div className="space-y-5" id="form-section-fonts">
             
@@ -1601,19 +1726,115 @@ export default function ReceiptForm({
                   Pilihan Font Struk Belanja
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Pilih gaya huruf untuk struk kasir Anda. Font otomatis diterapkan pada pratinjau, cetak printer, dan ekspor.
+                  Pilih gaya huruf untuk struk kasir Anda, atau impor font kustom sendiri (.TTF / .OTF). Otomatis diterapkan pada pratinjau, cetak printer thermal, dan ekspor.
                 </p>
               </div>
 
-              <div className="bg-slate-800/90 border border-slate-700 p-3 rounded-xl flex items-center gap-3 shrink-0">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase text-slate-400">Font Terpilih:</div>
-                  <div className="text-xs font-extrabold text-white">
-                    {RECEIPT_FONTS.find(f => f.id === (receipt.fontFamily || 'DEFAULT'))?.name || 'Default'}
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
+                {/* Impor Font Kustom Button */}
+                <label 
+                  htmlFor="receipt-custom-font-input" 
+                  className="flex-1 sm:flex-none px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                  title="Unggah berkas font TrueType (.ttf) atau OpenType (.otf)"
+                >
+                  <FolderUp className="w-4 h-4 text-slate-950" />
+                  <span>Impor Font Kustom</span>
+                  <input
+                    id="receipt-custom-font-input"
+                    type="file"
+                    accept=".ttf,.otf,font/ttf,font/otf,application/x-font-ttf,application/x-font-opentype"
+                    onChange={handleImportCustomFont}
+                    className="hidden"
+                  />
+                </label>
+
+                <div className="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex items-center gap-2.5 shrink-0">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></div>
+                  <div>
+                    <div className="text-[9px] font-bold uppercase text-slate-400">Font Terpilih:</div>
+                    <div className="text-xs font-extrabold text-white truncate max-w-[140px]">
+                      {(() => {
+                        const currentId = receipt.fontFamily || 'DEFAULT';
+                        const customMatch = customFonts.find(f => f.id === currentId || f.name === currentId);
+                        if (customMatch) return `${customMatch.name}`;
+                        const stdMatch = RECEIPT_FONTS.find(f => f.id === currentId);
+                        if (stdMatch) return stdMatch.name;
+                        return 'Default';
+                      })()}
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Error Notification */}
+            {fontUploadError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start justify-between gap-2.5 text-rose-800 text-xs font-medium animate-fadeIn">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Gagal Mengimpor Font:</span> {fontUploadError}
+                    <div className="text-[11px] text-rose-600 mt-0.5">
+                      Catatan: Sistem hanya mendukung format font <strong>.ttf</strong> dan <strong>.otf</strong>.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFontUploadError('')}
+                  className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Success Notification */}
+            {fontUploadSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start justify-between gap-2.5 text-emerald-800 text-xs font-medium animate-fadeIn">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Sukses:</span> {fontUploadSuccess}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFontUploadSuccess('')}
+                  className="text-emerald-500 hover:text-emerald-800 p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Custom Font Dropzone & Info Card */}
+            <div className="bg-amber-50/50 border border-dashed border-amber-300/80 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg shrink-0">
+                  <FileUp className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">Dukungan Font Kustom (.TTF & .OTF)</h4>
+                  <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                    Punya font struk khusus dari printer POS Anda? Unggah berkas font <strong>.ttf</strong> atau <strong>.otf</strong>. Font akan tersimpan di peramban dan siap dipakai kapan saja.
+                  </p>
+                </div>
+              </div>
+              <label
+                htmlFor="receipt-custom-font-input-secondary"
+                className="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-950 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
+              >
+                <Upload className="w-3.5 h-3.5 text-amber-700" />
+                <span>Pilih Berkas (.ttf/.otf)</span>
+                <input
+                  id="receipt-custom-font-input-secondary"
+                  type="file"
+                  accept=".ttf,.otf,font/ttf,font/otf,application/x-font-ttf,application/x-font-opentype"
+                  onChange={handleImportCustomFont}
+                  className="hidden"
+                />
+              </label>
             </div>
 
             {/* Filter Pills & Interactive Test String Input */}
@@ -1625,18 +1846,23 @@ export default function ReceiptForm({
                 </div>
 
                 <div className="flex flex-wrap gap-1">
-                  {['ALL', 'EAS', 'DEFAULT', 'DOT MATRIX', 'CLASSIC', 'MODERN'].map((cat) => (
+                  {['ALL', ...(customFonts.length > 0 ? ['KUSTOM'] : []), 'DEFAULT', 'EAS', 'DOT MATRIX', 'CLASSIC', 'MODERN'].map((cat) => (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setFontCategoryFilter(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                         fontCategoryFilter === cat
                           ? 'bg-slate-900 text-white shadow-xs'
                           : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {cat === 'ALL' ? 'Semua' : cat}
+                      <span>{cat === 'ALL' ? 'Semua' : cat === 'KUSTOM' ? 'Font Kustom' : cat}</span>
+                      {cat === 'KUSTOM' && (
+                        <span className="bg-amber-400 text-slate-950 text-[9px] px-1 rounded-full font-black">
+                          {customFonts.length}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -1679,84 +1905,194 @@ export default function ReceiptForm({
             </div>
 
             {/* Font Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="generator-font-cards">
-              {RECEIPT_FONTS
-                .filter((font) => fontCategoryFilter === 'ALL' || font.category === fontCategoryFilter)
-                .map((font) => {
-                  const isSelected = (receipt.fontFamily || 'DEFAULT') === font.id;
-                  const sampleToDisplay = customFontSampleText.trim() || font.sampleText;
-
-                  return (
-                    <div
-                      key={font.id}
-                      onClick={() => handleRecalculate({ fontFamily: font.id })}
-                      className={`p-3.5 rounded-xl border text-left transition-all relative flex flex-col justify-between gap-2.5 cursor-pointer ${
-                        isSelected
-                          ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-slate-900/15'
-                          : 'bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-2xs'
-                      }`}
-                      id={`receipt-font-${font.id}`}
-                    >
-                      {/* Top info badge */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                            isSelected 
-                              ? 'bg-white/20 text-white' 
-                              : font.category === 'EAS'
-                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                : font.category === 'DEFAULT'
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  : font.category === 'DOT MATRIX'
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                            {font.category}
-                          </span>
-                          <span className={`text-xs font-bold truncate max-w-[140px] ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                            {font.name}
-                          </span>
-                        </div>
-
-                        {isSelected ? (
-                          <div className="flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/30">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                            <span>Aktif</span>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-600">
-                            Pilih
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Live Typography Preview Box */}
-                      <div 
-                        className={`text-xs p-2.5 rounded-lg border overflow-hidden whitespace-nowrap text-ellipsis transition ${
-                          isSelected
-                            ? 'bg-slate-800/90 border-slate-700 text-amber-300 font-semibold'
-                            : 'bg-slate-50 border-slate-150 text-slate-900'
-                        }`}
-                        style={{ fontFamily: font.fontFamilyCss }}
-                      >
-                        <div className="truncate">{sampleToDisplay}</div>
-                        <div className="text-[10px] opacity-75 mt-0.5 truncate">1234567890 • Rp 45.000</div>
-                      </div>
-
-                      {/* Description */}
-                      <p className={`text-[10px] leading-relaxed line-clamp-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                        {font.description}
-                      </p>
+            <div className="space-y-4" id="generator-font-cards">
+              {/* SECTION: Custom Imported Fonts (if any and matching filter) */}
+              {(fontCategoryFilter === 'ALL' || fontCategoryFilter === 'KUSTOM') && customFonts.length > 0 && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      <FolderUp className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Font Kustom yang Diimpor ({customFonts.length})</span>
                     </div>
-                  );
-                })}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {customFonts.map((cFont) => {
+                      const isSelected = (receipt.fontFamily === cFont.id || receipt.fontFamily === cFont.name);
+                      const sampleToDisplay = customFontSampleText.trim() || '12345 TOTAL Rp 50.000 (KUSTOM)';
+                      const fontCss = `"${cFont.name}", "JetBrains Mono", ui-monospace, monospace`;
+
+                      return (
+                        <div
+                          key={cFont.id}
+                          onClick={() => handleRecalculate({ fontFamily: cFont.id })}
+                          className={`p-3.5 rounded-xl border text-left transition-all relative flex flex-col justify-between gap-2.5 cursor-pointer ${
+                            isSelected
+                              ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-amber-500/30'
+                              : 'bg-white border-amber-200/80 text-slate-800 hover:border-amber-400 hover:bg-amber-50/30 hover:shadow-2xs'
+                          }`}
+                          id={`receipt-custom-font-${cFont.id}`}
+                        >
+                          {/* Top info badge */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                                isSelected 
+                                  ? 'bg-amber-400 text-slate-950' 
+                                  : 'bg-amber-100 text-amber-900 border border-amber-200'
+                              }`}>
+                                KUSTOM .{cFont.format.toUpperCase()}
+                              </span>
+                              <span className={`text-xs font-bold truncate ${isSelected ? 'text-white' : 'text-slate-900'}`} title={cFont.name}>
+                                {cFont.name}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isSelected ? (
+                                <div className="flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/30">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  <span>Aktif</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-medium">
+                                  Pilih
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteCustomFont(cFont.id, cFont.name, e)}
+                                className={`p-1 rounded-md transition cursor-pointer ${
+                                  isSelected
+                                    ? 'text-slate-400 hover:text-rose-300 hover:bg-white/10'
+                                    : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                }`}
+                                title="Hapus font kustom ini"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Live Typography Preview Box */}
+                          <div 
+                            className={`text-xs p-2.5 rounded-lg border overflow-hidden whitespace-nowrap text-ellipsis transition ${
+                              isSelected
+                                ? 'bg-slate-800/90 border-slate-700 text-amber-300 font-semibold'
+                                : 'bg-amber-50/50 border-amber-200/60 text-slate-900'
+                            }`}
+                            style={{ fontFamily: fontCss }}
+                          >
+                            <div className="truncate">{sampleToDisplay}</div>
+                            <div className="text-[10px] opacity-75 mt-0.5 truncate">0123456789 • ABCDEFGHIJKLMNOPQRSTUVWXYZ</div>
+                          </div>
+
+                          {/* Metadata */}
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
+                            <span className="truncate max-w-[170px]" title={cFont.fileName}>📁 {cFont.fileName}</span>
+                            <span>{Math.round(cFont.fileSize / 1024)} KB</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Standard Built-in Fonts Grid */}
+              {fontCategoryFilter !== 'KUSTOM' && (
+                <div className="space-y-2.5">
+                  {customFonts.length > 0 && fontCategoryFilter === 'ALL' && (
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 pt-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wide">
+                        <Type className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Font Bawaan Sistem Thermal</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {RECEIPT_FONTS
+                      .filter((font) => fontCategoryFilter === 'ALL' || font.category === fontCategoryFilter)
+                      .map((font) => {
+                        const isSelected = (receipt.fontFamily || 'DEFAULT') === font.id;
+                        const sampleToDisplay = customFontSampleText.trim() || font.sampleText;
+
+                        return (
+                          <div
+                            key={font.id}
+                            onClick={() => handleRecalculate({ fontFamily: font.id })}
+                            className={`p-3.5 rounded-xl border text-left transition-all relative flex flex-col justify-between gap-2.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-slate-900/15'
+                                : 'bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50/80 hover:shadow-2xs'
+                            }`}
+                            id={`receipt-font-${font.id}`}
+                          >
+                            {/* Top info badge */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                                  isSelected 
+                                    ? 'bg-white/20 text-white' 
+                                    : font.category === 'EAS'
+                                      ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                      : font.category === 'DEFAULT'
+                                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        : font.category === 'DOT MATRIX'
+                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                }`}>
+                                  {font.category}
+                                </span>
+                                <span className={`text-xs font-bold truncate max-w-[140px] ${isSelected ? 'text-white' : 'text-slate-900'}`}>
+                                  {font.name}
+                                </span>
+                              </div>
+
+                              {isSelected ? (
+                                <div className="flex items-center gap-1 bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/30">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  <span>Aktif</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-600">
+                                  Pilih
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Live Typography Preview Box */}
+                            <div 
+                              className={`text-xs p-2.5 rounded-lg border overflow-hidden whitespace-nowrap text-ellipsis transition ${
+                                isSelected
+                                  ? 'bg-slate-800/90 border-slate-700 text-amber-300 font-semibold'
+                                  : 'bg-slate-50 border-slate-150 text-slate-900'
+                              }`}
+                              style={{ fontFamily: font.fontFamilyCss }}
+                            >
+                              <div className="truncate">{sampleToDisplay}</div>
+                              <div className="text-[10px] opacity-75 mt-0.5 truncate">1234567890 • Rp 45.000</div>
+                            </div>
+
+                            {/* Description */}
+                            <p className={`text-[10px] leading-relaxed line-clamp-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                              {font.description}
+                            </p>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Informational Card */}
             <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3.5 flex items-start gap-2.5 text-amber-900 text-xs">
               <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="leading-relaxed">
-                <strong>Tips Cetak Thermal:</strong> Pilihan font ini otomatis berlaku ketika Anda menekan <em>Cetak Thermal Struk</em>, menyimpan file <em>Gambar JPG/PNG</em>, mengekspor <em>PDF</em>, ataupun menyimpan data ke <em>Riwayat Ledger</em>.
+                <strong>Tips Cetak Thermal & Font Kustom:</strong> Pilihan font ini otomatis berlaku ketika Anda menekan <em>Cetak Thermal Struk</em>, menyimpan file <em>Gambar JPG/PNG</em>, mengekspor <em>PDF</em>, ataupun menyimpan data ke <em>Riwayat Ledger</em>.
               </p>
             </div>
 
