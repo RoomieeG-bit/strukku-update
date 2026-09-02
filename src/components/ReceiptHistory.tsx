@@ -25,12 +25,17 @@ import {
   ShoppingBag,
   Filter,
   Copy,
-  Check
+  Check,
+  Pin,
+  PinOff,
+  Star,
+  Bookmark
 } from 'lucide-react';
 
 interface ReceiptHistoryProps {
   history: Receipt[];
   onLoadReceipt: (receipt: Receipt) => void;
+  onTogglePinReceipt?: (id: string) => void;
   onDeleteReceipt: (id: string) => void;
   onClearHistory: () => void;
   onImportHistory: (imported: Receipt[]) => void;
@@ -40,6 +45,7 @@ interface ReceiptHistoryProps {
 export default function ReceiptHistory({
   history,
   onLoadReceipt,
+  onTogglePinReceipt,
   onDeleteReceipt,
   onClearHistory,
   onImportHistory,
@@ -52,7 +58,9 @@ export default function ReceiptHistory({
   const [importSuccess, setImportSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Filter and search history list
+  const pinnedCount = history.filter((item) => item.isPinned || item.isFavorite).length;
+
+  // Filter history list
   const filteredHistory = history.filter((item) => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch = !term ||
@@ -65,13 +73,24 @@ export default function ReceiptHistory({
         (i.id && i.id.toLowerCase().includes(term))
       );
 
-    const matchesMethod = methodFilter === 'ALL' || 
+    const matchesMethod = 
+      methodFilter === 'ALL' || 
+      (methodFilter === 'PINNED' && (item.isPinned || item.isFavorite)) ||
       item.paymentMethod === methodFilter || 
       (item.paymentStatus || 'SUDAH_LUNAS') === methodFilter;
     
     const matchesDate = !dateFilter || item.dateTime.startsWith(dateFilter);
 
     return matchesSearch && matchesMethod && matchesDate;
+  });
+
+  // Sort history: pinned items always float to the top
+  const sortedHistory = [...filteredHistory].sort((a, b) => {
+    const isAPinned = Boolean(a.isPinned || a.isFavorite);
+    const isBPinned = Boolean(b.isPinned || b.isFavorite);
+    if (isAPinned && !isBPinned) return -1;
+    if (!isAPinned && isBPinned) return 1;
+    return 0; // maintain original chronological order
   });
 
   // Calculate stats on filtered list
@@ -238,6 +257,7 @@ export default function ReceiptHistory({
                 id="history-method-filter"
               >
                 <option value="ALL">💳 Semua Metode & Status</option>
+                <option value="PINNED">📌 Khusus Disematkan / Favorit ({pinnedCount})</option>
                 <option value="CASH">💵 Tunai (CASH)</option>
                 <option value="QRIS">📱 QRIS / E-Wallet</option>
                 <option value="DEBIT">💳 Kartu Debit</option>
@@ -259,8 +279,24 @@ export default function ReceiptHistory({
             </div>
           </div>
 
-          {/* Results Count & Reset Filter Indicator */}
-          <div className="flex items-center gap-2 text-xs">
+          {/* Results Count, Quick Pinned Filter & Reset Filter Indicator */}
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            {pinnedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setMethodFilter(prev => prev === 'PINNED' ? 'ALL' : 'PINNED')}
+                className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer border ${
+                  methodFilter === 'PINNED'
+                    ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                }`}
+                title="Tampilkan hanya struk yang disematkan / di-pin"
+              >
+                <Pin className={`w-3 h-3 ${methodFilter === 'PINNED' ? 'fill-slate-950' : 'fill-amber-600'}`} />
+                <span>Disematkan ({pinnedCount})</span>
+              </button>
+            )}
+
             <span className="text-slate-500 font-medium">
               <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {history.length} transaksi
             </span>
@@ -290,7 +326,7 @@ export default function ReceiptHistory({
             </p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm">
               {searchTerm || methodFilter !== 'ALL' || dateFilter 
-                ? `Tidak ditemukan transaksi dengan kata kunci "${searchTerm || methodFilter}". Coba ubah atau bersihkan filter pencarian.` 
+                ? `Tidak ditemukan transaksi dengan filter yang dipilih. Coba ubah atau bersihkan filter pencarian.` 
                 : 'Struk yang Anda buat di tab generator akan tersimpan secara otomatis di sini.'}
             </p>
             {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
@@ -305,148 +341,176 @@ export default function ReceiptHistory({
           </div>
         ) : (
           <div className="divide-y divide-slate-100" id="history-items-list">
-            {filteredHistory.map((item) => (
-              <div 
-                key={item.id} 
-                className="p-4 hover:bg-slate-50/70 transition flex flex-col md:flex-row justify-between md:items-center gap-3"
-              >
-                {/* Store details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-slate-800 text-sm truncate font-display">
-                      {item.storeName}
-                    </span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                      item.paymentMethod === 'CASH'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                        : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                    }`}>
-                      {item.paymentMethod}
-                    </span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                      (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
-                        ? 'bg-green-50 text-green-700 border border-green-100'
-                        : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
-                        ? 'bg-rose-50 text-rose-700 border border-rose-100'
-                        : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
-                    }`}>
-                      {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
-                       (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
-                    </span>
-                    {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
-                        {item.fontFamily === 'EAS' ? 'EAS Alert' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit CRT' : item.fontFamily === 'DOT_MATRIX' ? 'Dot Matrix' : item.fontFamily}
+            {sortedHistory.map((item) => {
+              const isPinned = Boolean(item.isPinned || item.isFavorite);
+
+              return (
+                <div 
+                  key={item.id} 
+                  className={`p-4 transition flex flex-col md:flex-row justify-between md:items-center gap-3 ${
+                    isPinned 
+                      ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-400' 
+                      : 'hover:bg-slate-50/70'
+                  }`}
+                >
+                  {/* Store details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isPinned && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 flex items-center gap-1 shadow-2xs">
+                          <Pin className="w-3 h-3 fill-slate-950" /> Tersemat di Atas
+                        </span>
+                      )}
+                      <span className="font-bold text-slate-800 text-sm truncate font-display">
+                        {item.storeName}
                       </span>
-                    )}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                        item.paymentMethod === 'CASH'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                          : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                      }`}>
+                        {item.paymentMethod}
+                      </span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                        (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                          ? 'bg-green-50 text-green-700 border border-green-100'
+                          : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                          : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                      }`}>
+                        {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                         (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
+                      </span>
+                      {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
+                          {item.fontFamily === 'EAS' ? 'EAS Alert' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit CRT' : item.fontFamily === 'DOT_MATRIX' ? 'Dot Matrix' : item.fontFamily}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-mono text-[10px] text-slate-700 truncate font-semibold" title={item.transactionId}>
+                          {item.transactionId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                          className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition cursor-pointer"
+                          title="Salin ID Transaksi"
+                        >
+                          {copiedId === item.transactionId ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+
+                      {item.customerName ? (
+                        <div className="flex items-center gap-1">
+                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate font-medium text-slate-700" title={`Pelanggan: ${item.customerName}`}>
+                            {item.customerName}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <User className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                          <span className="truncate text-slate-400" title={`Kasir: ${item.cashierName}`}>
+                            Kasir: {item.cashierName}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>{formatDateTime(item.dateTime).split(' ')[0]}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <ShoppingBag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-semibold text-slate-700">
+                          {item.items.reduce((sum, i) => sum + i.quantity, 0)} pcs ({item.items.length} item)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* List of short preview items */}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {item.items.slice(0, 4).map((it, idx) => {
+                        const isItemMatched = searchTerm && it.name.toLowerCase().includes(searchTerm.toLowerCase().trim());
+                        return (
+                          <span 
+                            key={idx} 
+                            onClick={() => setSearchTerm(it.name)}
+                            className={`text-[10px] px-2 py-0.5 rounded-full transition cursor-pointer ${
+                              isItemMatched 
+                                ? 'bg-slate-900 text-white font-bold' 
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                            title={`Cari transaksi yang memiliki item "${it.name}"`}
+                          >
+                            {it.name} x{it.quantity}
+                          </span>
+                        );
+                      })}
+                      {item.items.length > 4 && (
+                        <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                          +{item.items.length - 4} lainnya
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-2 text-xs text-slate-500">
-                    <div className="flex items-center gap-1">
-                      <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="font-mono text-[10px] text-slate-700 truncate font-semibold" title={item.transactionId}>
-                        {item.transactionId}
+                  {/* Right side Amount and Restore Actions */}
+                  <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Total Belanja</span>
+                      <span className="text-sm font-mono font-bold text-slate-900 block">
+                        {formatCurrency(item.total, currencySymbol)}
                       </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {/* Toggle Pin / Favorite Button */}
                       <button
                         type="button"
-                        onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
-                        className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition cursor-pointer"
-                        title="Salin ID Transaksi"
+                        onClick={() => onTogglePinReceipt?.(item.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                          isPinned
+                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs font-bold'
+                            : 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-900 hover:border-amber-200 border border-transparent'
+                        }`}
+                        title={isPinned ? 'Lepas Sematan (Unpin)' : 'Sematkan Struk ke Paling Atas (Pin)'}
                       >
-                        {copiedId === item.transactionId ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
+                        <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-amber-600 text-amber-800' : 'text-slate-400'}`} />
+                        <span className="hidden sm:inline">{isPinned ? 'Tersemat' : 'Pin'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onLoadReceipt(item)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Muat kembali ke generator POS"
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5" /> Muat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteReceipt(item.id)}
+                        className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                        title="Hapus Struk dari Riwayat"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-
-                    {item.customerName ? (
-                      <div className="flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate font-medium text-slate-700" title={`Pelanggan: ${item.customerName}`}>
-                          {item.customerName}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                        <span className="truncate text-slate-400" title={`Kasir: ${item.cashierName}`}>
-                          Kasir: {item.cashierName}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{formatDateTime(item.dateTime).split(' ')[0]}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <ShoppingBag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="font-semibold text-slate-700">
-                        {item.items.reduce((sum, i) => sum + i.quantity, 0)} pcs ({item.items.length} item)
-                      </span>
-                    </div>
                   </div>
 
-                  {/* List of short preview items */}
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {item.items.slice(0, 4).map((it, idx) => {
-                      const isItemMatched = searchTerm && it.name.toLowerCase().includes(searchTerm.toLowerCase().trim());
-                      return (
-                        <span 
-                          key={idx} 
-                          onClick={() => setSearchTerm(it.name)}
-                          className={`text-[10px] px-2 py-0.5 rounded-full transition cursor-pointer ${
-                            isItemMatched 
-                              ? 'bg-slate-900 text-white font-bold' 
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                          title={`Cari transaksi yang memiliki item "${it.name}"`}
-                        >
-                          {it.name} x{it.quantity}
-                        </span>
-                      );
-                    })}
-                    {item.items.length > 4 && (
-                      <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                        +{item.items.length - 4} lainnya
-                      </span>
-                    )}
-                  </div>
                 </div>
-
-                {/* Right side Amount and Restore Actions */}
-                <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block">Total Belanja</span>
-                    <span className="text-sm font-mono font-bold text-slate-900 block">
-                      {formatCurrency(item.total, currencySymbol)}
-                    </span>
-                  </div>
-
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onLoadReceipt(item)}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                      title="Load kembali ke generator"
-                    >
-                      <ArrowUpRight className="w-3.5 h-3.5" /> Muat
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteReceipt(item.id)}
-                      className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                      title="Hapus Struk dari Riwayat"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

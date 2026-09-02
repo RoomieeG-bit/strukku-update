@@ -10,6 +10,7 @@ import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
 import ReceiptHistory from './components/ReceiptHistory';
 import Dashboard from './components/Dashboard';
+import Settings from './components/Settings';
 import { 
   PlusCircle, 
   History, 
@@ -18,7 +19,8 @@ import {
   HelpCircle,
   FileText,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Settings as SettingsIcon
 } from 'lucide-react';
 
 // Get local date-time string in YYYY-MM-DDTHH:mm format
@@ -35,9 +37,54 @@ const DEFAULT_ITEMS: Item[] = [
   { id: '2', name: 'Roti Bakar Cokelat', quantity: 1, price: 15000 },
 ];
 
+function getFreshDefaultReceipt(): Receipt {
+  const initialTxId = generateTransactionId();
+  const initialDate = getInitialLocalDateTime();
+  const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
+    DEFAULT_ITEMS,
+    11, // Standard PPN 11%
+    0,
+    'PERCENT'
+  );
+
+  return {
+    id: Date.now().toString(),
+    storeName: 'KOPI SENJA CIPUTAT',
+    storeAddress: 'Jl. Raya Ciputat Raya No. 42, Jakarta',
+    storePhone: '021-7401234',
+    storeWebsite: 'www.kopisenjaabadi.com',
+    cashierName: 'Andi Wijaya',
+    transactionId: initialTxId,
+    dateTime: initialDate,
+    items: DEFAULT_ITEMS,
+    taxRate: 11,
+    taxAmount,
+    discountRate: 0,
+    discountType: 'PERCENT',
+    discountAmount,
+    subtotal,
+    total,
+    paymentMethod: 'CASH',
+    paymentStatus: 'SUDAH_LUNAS',
+    cashReceived: 50000,
+    changeAmount: 50000 - total,
+    notesHeader: 'PT. SENJA ABADI INTERNASIONAL',
+    notesFooter: 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nWiFi: senjagratis / pwd: kopi\nLAYANAN PELANGGAN: 0812-XXXX-XXXX',
+    fontFamily: 'DEFAULT',
+    paperWidthMm: 80,
+    paperSizePreset: '80mm',
+    codeDisplayType: 'BOTH',
+    qrValue: 'https://www.kopisenjaabadi.com/struk/verify',
+    qrLabel: 'Scan untuk verifikasi struk asli',
+    qrSize: 90,
+    barcodeValue: '',
+    showBarcodeNumber: true,
+  };
+}
+
 export default function App() {
   // Global active view tab
-  const [activeView, setActiveView] = useState<'generator' | 'history' | 'dashboard'>('generator');
+  const [activeView, setActiveView] = useState<'generator' | 'history' | 'dashboard' | 'settings'>('generator');
   
   // Currency setting
   const [currencySymbol, setCurrencySymbol] = useState<string>(() => {
@@ -63,48 +110,7 @@ export default function App() {
 
   // Active receipt state in the editor
   const [receipt, setReceipt] = useState<Receipt>(() => {
-    const initialTxId = generateTransactionId();
-    const initialDate = getInitialLocalDateTime();
-    const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
-      DEFAULT_ITEMS,
-      11, // Standard PPN 11%
-      0,
-      'PERCENT'
-    );
-
-    return {
-      id: Date.now().toString(),
-      storeName: 'KOPI SENJA CIPUTAT',
-      storeAddress: 'Jl. Raya Ciputat Raya No. 42, Jakarta',
-      storePhone: '021-7401234',
-      storeWebsite: 'www.kopisenjaabadi.com',
-      cashierName: 'Andi Wijaya',
-      transactionId: initialTxId,
-      dateTime: initialDate,
-      items: DEFAULT_ITEMS,
-      taxRate: 11,
-      taxAmount,
-      discountRate: 0,
-      discountType: 'PERCENT',
-      discountAmount,
-      subtotal,
-      total,
-      paymentMethod: 'CASH',
-      paymentStatus: 'SUDAH_LUNAS',
-      cashReceived: 50000,
-      changeAmount: 50000 - total,
-      notesHeader: 'PT. SENJA ABADI INTERNASIONAL',
-      notesFooter: 'TERIMA KASIH ATAS KUNJUNGAN ANDA\nWiFi: senjagratis / pwd: kopi\nLAYANAN PELANGGAN: 0812-XXXX-XXXX',
-      fontFamily: 'DEFAULT',
-      paperWidthMm: 80,
-      paperSizePreset: '80mm',
-      codeDisplayType: 'BOTH',
-      qrValue: 'https://www.kopisenjaabadi.com/struk/verify',
-      qrLabel: 'Scan untuk verifikasi struk asli',
-      qrSize: 90,
-      barcodeValue: '',
-      showBarcodeNumber: true,
-    };
+    return getFreshDefaultReceipt();
   });
 
   // Success notifications
@@ -196,6 +202,19 @@ export default function App() {
     }, 100);
   };
 
+  // Toggle Pin / Favorite state for a receipt in history
+  const handleTogglePinReceipt = (id: string) => {
+    setHistory((prev) => {
+      const target = prev.find((item) => item.id === id);
+      const nextPinned = !(target?.isPinned || target?.isFavorite);
+      const updated = prev.map((item) => 
+        item.id === id ? { ...item, isPinned: nextPinned, isFavorite: nextPinned } : item
+      );
+      showToast(nextPinned ? '📌 Struk berhasil di-pin ke paling atas riwayat!' : 'Struk dilepas dari pin riwayat.');
+      return updated;
+    });
+  };
+
   // Delete a specific receipt from history
   const handleDeleteReceipt = (id: string) => {
     setHistory((prev) => prev.filter((item) => item.id !== id));
@@ -208,10 +227,47 @@ export default function App() {
     showToast('Seluruh riwayat transaksi telah dihapus.');
   };
 
-  // Import JSON backup
+  // Import JSON backup (legacy history only)
   const handleImportHistory = (importedList: Receipt[]) => {
     setHistory(importedList);
     showToast(`${importedList.length} Transaksi berhasil diimpor dari cadangan!`);
+  };
+
+  // Reset all data from localStorage (Factory Reset)
+  const handleResetAllData = () => {
+    try {
+      localStorage.clear();
+    } catch (e) {
+      console.error('Error clearing localStorage:', e);
+    }
+    setHistory([]);
+    setCurrencySymbol('Rp');
+    setReceipt(getFreshDefaultReceipt());
+    showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
+  };
+
+  // Full backup restore (including pinned receipts, custom presets, currency, active draft)
+  const handleRestoreBackup = (backupData: {
+    history?: Receipt[];
+    customPresets?: any[];
+    currencySymbol?: string;
+    activeReceipt?: Receipt;
+  }) => {
+    if (Array.isArray(backupData.history)) {
+      setHistory(backupData.history);
+      localStorage.setItem('strukku_history', JSON.stringify(backupData.history));
+    }
+    if (Array.isArray(backupData.customPresets)) {
+      localStorage.setItem('strukku_custom_presets', JSON.stringify(backupData.customPresets));
+    }
+    if (backupData.currencySymbol) {
+      setCurrencySymbol(backupData.currencySymbol);
+      localStorage.setItem('strukku_currency', backupData.currencySymbol);
+    }
+    if (backupData.activeReceipt && typeof backupData.activeReceipt === 'object') {
+      setReceipt(backupData.activeReceipt);
+    }
+    showToast('🎉 Seluruh data cadangan lengkap berhasil dipulihkan!');
   };
 
   return (
@@ -237,7 +293,7 @@ export default function App() {
               <span className="font-extrabold font-display text-base tracking-tight text-slate-900 flex items-center gap-1.5">
                 STRUKKU <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded">POS</span>
               </span>
-              <span className="text-[10px] text-slate-400 font-medium block leading-none">Generator Struk v2.4</span>
+              <span className="text-[10px] text-slate-400 font-medium block leading-none">Generator Struk v2.5</span>
             </div>
           </div>
 
@@ -286,6 +342,18 @@ export default function App() {
               <TrendingUp className="w-3.5 h-3.5" />
               <span>Statistik</span>
             </button>
+            <button
+              onClick={() => setActiveView('settings')}
+              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                activeView === 'settings'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+              id="nav-app-settings"
+            >
+              <SettingsIcon className="w-3.5 h-3.5" />
+              <span>Pengaturan</span>
+            </button>
           </nav>
 
           {/* Currency Shortcut preference */}
@@ -333,6 +401,7 @@ export default function App() {
             <ReceiptHistory
               history={history}
               onLoadReceipt={handleLoadReceipt}
+              onTogglePinReceipt={handleTogglePinReceipt}
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
               onImportHistory={handleImportHistory}
@@ -347,6 +416,21 @@ export default function App() {
             <Dashboard
               history={history}
               currencySymbol={currencySymbol}
+            />
+          </div>
+        )}
+
+        {/* VIEW 4: APP SETTINGS, BACKUP & RESET */}
+        {activeView === 'settings' && (
+          <div className="h-full">
+            <Settings
+              history={history}
+              receipt={receipt}
+              currencySymbol={currencySymbol}
+              onSetCurrencySymbol={setCurrencySymbol}
+              onResetAllData={handleResetAllData}
+              onRestoreBackup={handleRestoreBackup}
+              showToast={showToast}
             />
           </div>
         )}

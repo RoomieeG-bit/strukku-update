@@ -91,6 +91,8 @@ export interface Receipt {
   paperSizePreset?: ReceiptPaperSizePreset;
   labels?: ReceiptLabels;
   customLabels?: CustomLabel[];
+  isPinned?: boolean; // Pinned to top of ledger history
+  isFavorite?: boolean;
 }
 
 export interface StoreProfile {
