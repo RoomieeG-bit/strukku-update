@@ -104,6 +104,7 @@ export interface Receipt {
   customLabels?: CustomLabel[];
   isPinned?: boolean; // Pinned to top of ledger history
   isFavorite?: boolean;
+  deletedAt?: string; // ISO string when receipt was moved to trash
 }
 
 export interface StoreProfile {

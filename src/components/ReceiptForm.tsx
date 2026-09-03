@@ -311,9 +311,6 @@ export default function ReceiptForm({
 
   const handleDeleteCustomFont = (fontId: string, fontName: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm(`Hapus font kustom "${fontName}" dari daftar aplikasi?`)) {
-      return;
-    }
 
     const updatedList = customFonts.filter(f => f.id !== fontId);
     setCustomFonts(updatedList);

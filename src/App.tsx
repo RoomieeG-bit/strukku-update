@@ -108,6 +108,22 @@ export default function App() {
     return [];
   });
 
+  // Trash history log of deleted transactions (can be restored)
+  const [trashHistory, setTrashHistory] = useState<Receipt[]>(() => {
+    const stored = localStorage.getItem('strukku_trash_history');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing local storage trash history:', e);
+      }
+    }
+    return [];
+  });
+
   // Active receipt state in the editor
   const [receipt, setReceipt] = useState<Receipt>(() => {
     return getFreshDefaultReceipt();
@@ -131,6 +147,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_history', JSON.stringify(history));
   }, [history]);
+
+  // Sync trashHistory state with localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_trash_history', JSON.stringify(trashHistory));
+  }, [trashHistory]);
 
   // Show a brief visual toast notification
   const showToast = (message: string) => {
@@ -221,16 +242,75 @@ export default function App() {
     });
   };
 
-  // Delete a specific receipt from history
+  // Delete a specific receipt from history (moves to Trash so it can be restored)
   const handleDeleteReceipt = (id: string) => {
+    const itemToDelete = history.find((item) => item.id === id);
+    if (!itemToDelete) return;
+
+    const markedItem: Receipt = {
+      ...itemToDelete,
+      deletedAt: new Date().toISOString(),
+    };
+
     setHistory((prev) => prev.filter((item) => item.id !== id));
-    showToast('Struk berhasil dihapus dari riwayat.');
+    setTrashHistory((prev) => [markedItem, ...prev.filter((item) => item.id !== id)]);
+    showToast(`🗑️ Struk #${itemToDelete.transactionId.split('/')[0]} dipindahkan ke Sampah.`);
   };
 
-  // Clear entire history
+  // Clear entire history (moves all active receipts to Trash)
   const handleClearHistory = () => {
+    if (history.length === 0) return;
+    const now = new Date().toISOString();
+    const markedItems: Receipt[] = history.map((item) => ({
+      ...item,
+      deletedAt: item.deletedAt || now,
+    }));
+
+    setTrashHistory((prev) => [...markedItems, ...prev]);
     setHistory([]);
-    showToast('Seluruh riwayat transaksi telah dihapus.');
+    showToast(`${markedItems.length} transaksi dipindahkan ke Sampah.`);
+  };
+
+  // Restore a single receipt from trash back to active history
+  const handleRestoreReceipt = (id: string) => {
+    const itemToRestore = trashHistory.find((item) => item.id === id);
+    if (!itemToRestore) return;
+
+    const restoredItem: Receipt = {
+      ...itemToRestore,
+      deletedAt: undefined,
+    };
+
+    setTrashHistory((prev) => prev.filter((item) => item.id !== id));
+    setHistory((prev) => [restoredItem, ...prev.filter((item) => item.id !== id)]);
+    showToast(`♻️ Struk #${itemToRestore.transactionId.split('/')[0]} berhasil dipulihkan ke Riwayat!`);
+  };
+
+  // Restore all receipts from trash back to active history
+  const handleRestoreAllTrash = () => {
+    if (trashHistory.length === 0) return;
+    const count = trashHistory.length;
+    const restoredItems: Receipt[] = trashHistory.map((item) => ({
+      ...item,
+      deletedAt: undefined,
+    }));
+
+    const restoredIds = new Set(restoredItems.map((item) => item.id));
+    setHistory((prev) => [...restoredItems, ...prev.filter((item) => !restoredIds.has(item.id))]);
+    setTrashHistory([]);
+    showToast(`♻️ ${count} struk berhasil dipulihkan ke Riwayat!`);
+  };
+
+  // Permanently delete a single receipt from trash
+  const handlePermanentDeleteReceipt = (id: string) => {
+    setTrashHistory((prev) => prev.filter((item) => item.id !== id));
+    showToast('Struk dihapus permanen dari Sampah.');
+  };
+
+  // Empty all items from trash
+  const handleEmptyTrash = () => {
+    setTrashHistory([]);
+    showToast('Kotak Sampah berhasil dikosongkan.');
   };
 
   // Import JSON backup (legacy history only)
@@ -247,6 +327,7 @@ export default function App() {
       console.error('Error clearing localStorage:', e);
     }
     setHistory([]);
+    setTrashHistory([]);
     setCurrencySymbol('Rp');
     setReceipt(getFreshDefaultReceipt());
     showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
@@ -406,10 +487,15 @@ export default function App() {
           <div className="h-full">
             <ReceiptHistory
               history={history}
+              trashHistory={trashHistory}
               onLoadReceipt={handleLoadReceipt}
               onTogglePinReceipt={handleTogglePinReceipt}
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
+              onRestoreReceipt={handleRestoreReceipt}
+              onRestoreAllTrash={handleRestoreAllTrash}
+              onPermanentDeleteReceipt={handlePermanentDeleteReceipt}
+              onEmptyTrash={handleEmptyTrash}
               onImportHistory={handleImportHistory}
               currencySymbol={currencySymbol}
             />

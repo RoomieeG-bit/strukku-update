@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Receipt } from '../types';
 import { formatCurrency } from '../utils';
 import {
@@ -30,7 +30,9 @@ import {
   Sparkles, 
   Calendar,
   Layers,
-  Award
+  Award,
+  BarChart3,
+  CalendarDays
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -39,6 +41,8 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ history, currencySymbol }: DashboardProps) {
+  const [monthlyMetric, setMonthlyMetric] = useState<'sales' | 'count'>('sales');
+  const [selectedYear, setSelectedYear] = useState<string>('ALL');
   
   // Guard for empty history
   if (history.length === 0) {
@@ -126,6 +130,136 @@ export default function Dashboard({ history, currencySymbol }: DashboardProps) {
     }))
     .sort((a, b) => b.Qty - a.Qty)
     .slice(0, 5); // top 5
+
+  // 5. Prep Monthly Sales (Recharts Bar Chart Data)
+  const MONTH_NAMES = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  const MONTH_SHORT = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+  ];
+
+  const monthlyStatsMap: {
+    [key: string]: {
+      sortKey: string;
+      year: number;
+      monthIndex: number;
+      monthLabel: string;
+      fullMonthName: string;
+      totalSales: number;
+      receiptCount: number;
+      itemsCount: number;
+      avgPerReceipt: number;
+    };
+  } = {};
+
+  const availableYearsSet = new Set<number>();
+
+  history.forEach((receipt) => {
+    const d = new Date(receipt.dateTime);
+    if (isNaN(d.getTime())) return;
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    availableYearsSet.add(y);
+    const key = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+    if (!monthlyStatsMap[key]) {
+      monthlyStatsMap[key] = {
+        sortKey: key,
+        year: y,
+        monthIndex: m,
+        monthLabel: `${MONTH_SHORT[m]} ${y}`,
+        fullMonthName: `${MONTH_NAMES[m]} ${y}`,
+        totalSales: 0,
+        receiptCount: 0,
+        itemsCount: 0,
+        avgPerReceipt: 0,
+      };
+    }
+
+    monthlyStatsMap[key].totalSales += receipt.total;
+    monthlyStatsMap[key].receiptCount += 1;
+    const itemsInReceipt = receipt.items.reduce((acc, i) => acc + i.quantity, 0);
+    monthlyStatsMap[key].itemsCount += itemsInReceipt;
+  });
+
+  Object.values(monthlyStatsMap).forEach((m) => {
+    m.avgPerReceipt = m.receiptCount > 0 ? Math.round(m.totalSales / m.receiptCount) : 0;
+  });
+
+  const allMonthlyList = Object.values(monthlyStatsMap).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  const sortedYears = Array.from(availableYearsSet).sort((a, b) => b - a);
+
+  const filteredMonthlyList = selectedYear === 'ALL'
+    ? allMonthlyList
+    : allMonthlyList.filter((m) => m.year.toString() === selectedYear);
+
+  const peakMonthlySales = filteredMonthlyList.length > 0
+    ? Math.max(...filteredMonthlyList.map((m) => m.totalSales))
+    : 0;
+  const peakMonthlyCount = filteredMonthlyList.length > 0
+    ? Math.max(...filteredMonthlyList.map((m) => m.receiptCount))
+    : 0;
+
+  const highestSalesMonth = filteredMonthlyList.length > 0
+    ? [...filteredMonthlyList].sort((a, b) => b.totalSales - a.totalSales)[0]
+    : null;
+
+  const avgMonthlyRevenue = filteredMonthlyList.length > 0
+    ? Math.round(filteredMonthlyList.reduce((sum, m) => sum + m.totalSales, 0) / filteredMonthlyList.length)
+    : 0;
+
+  const formatCompactNumber = (val: number) => {
+    if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}M`;
+    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}jt`;
+    if (val >= 1_000) return `${(val / 1_000).toFixed(0)}rb`;
+    return val.toString();
+  };
+
+  const CustomMonthlyTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 text-white p-3 rounded-xl shadow-xl border border-slate-800 text-xs min-w-[200px]">
+          <div className="font-bold text-slate-200 border-b border-slate-800 pb-1.5 mb-1.5 font-display flex items-center justify-between">
+            <span>{data.fullMonthName}</span>
+            <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300 font-mono">
+              {data.year}
+            </span>
+          </div>
+          <div className="space-y-1.5 text-[11px]">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Total Penjualan:</span>
+              <span className="font-bold text-emerald-400 font-mono">
+                {formatCurrency(data.totalSales, currencySymbol)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Jumlah Transaksi:</span>
+              <span className="font-bold text-indigo-300 font-mono">
+                {data.receiptCount} struk
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-400">Total Item Terjual:</span>
+              <span className="font-medium text-slate-300 font-mono">
+                {data.itemsCount} pcs
+              </span>
+            </div>
+            <div className="flex justify-between items-center pt-1.5 border-t border-slate-800">
+              <span className="text-slate-400">Rata-rata / Struk:</span>
+              <span className="font-semibold text-amber-300 font-mono">
+                {formatCurrency(data.avgPerReceipt, currencySymbol)}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-6" id="dashboard-panel">
@@ -274,6 +408,172 @@ export default function Dashboard({ history, currencySymbol }: DashboardProps) {
           )}
         </div>
 
+      </div>
+
+      {/* Monthly Sales Bar Chart Section (Recharts) */}
+      <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-xs space-y-4" id="monthly-sales-chart-panel">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-slate-900 text-white rounded-xl shadow-2xs">
+              <BarChart3 className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Grafik Penjualan Bulanan</h4>
+              <span className="text-xs text-slate-500 font-medium">Akumulasi total omset dan volume transaksi bulanan</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Year selector if multiple years */}
+            {sortedYears.length > 1 && (
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+                id="select-monthly-year"
+              >
+                <option value="ALL">Semua Tahun</option>
+                {sortedYears.map((yr) => (
+                  <option key={yr} value={yr.toString()}>{yr}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Metric Toggle: Omset vs Jumlah Struk */}
+            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200/60">
+              <button
+                type="button"
+                onClick={() => setMonthlyMetric('sales')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  monthlyMetric === 'sales'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                id="btn-metric-sales"
+              >
+                Total Omset ({currencySymbol})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonthlyMetric('count')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  monthlyMetric === 'count'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                id="btn-metric-count"
+              >
+                Jumlah Struk
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Monthly Highlights Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-100 text-xs">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Bulan Tertinggi</span>
+            <span className="font-bold text-slate-900 truncate block mt-0.5">
+              {highestSalesMonth ? highestSalesMonth.fullMonthName : '-'}
+            </span>
+            <span className="text-[11px] font-mono text-emerald-600 font-semibold block">
+              {highestSalesMonth ? formatCurrency(highestSalesMonth.totalSales, currencySymbol) : '-'}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rata-rata Bulanan</span>
+            <span className="font-bold text-slate-900 truncate block mt-0.5">
+              {formatCurrency(avgMonthlyRevenue, currencySymbol)}
+            </span>
+            <span className="text-[11px] text-slate-500 block">per bulan aktif</span>
+          </div>
+
+          <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200/60 pt-2 sm:pt-0 sm:pl-3">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Periode Tercatat</span>
+            <span className="font-bold text-slate-900 truncate block mt-0.5">
+              {filteredMonthlyList.length} Bulan
+            </span>
+            <span className="text-[11px] text-slate-500 block">
+              {filteredMonthlyList.reduce((sum, m) => sum + m.receiptCount, 0)} total transaksi
+            </span>
+          </div>
+        </div>
+
+        {/* Recharts BarChart */}
+        {filteredMonthlyList.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-xs text-slate-400 italic">
+            Tidak ada data transaksi pada tahun yang dipilih
+          </div>
+        ) : (
+          <div className="h-72 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={filteredMonthlyList}
+                margin={{ top: 15, right: 15, left: -10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="monthLabel"
+                  stroke="#94a3b8"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={{ stroke: '#e2e8f0' }}
+                />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={10}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => 
+                    monthlyMetric === 'sales'
+                      ? `${currencySymbol} ${formatCompactNumber(val)}`
+                      : `${val}`
+                  }
+                />
+                <Tooltip
+                  content={<CustomMonthlyTooltip />}
+                  cursor={{ fill: 'rgba(241, 245, 249, 0.6)' }}
+                />
+                <Bar
+                  dataKey={monthlyMetric === 'sales' ? 'totalSales' : 'receiptCount'}
+                  name={monthlyMetric === 'sales' ? 'Total Penjualan' : 'Jumlah Struk'}
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={52}
+                >
+                  {filteredMonthlyList.map((entry, index) => {
+                    const isPeak = monthlyMetric === 'sales'
+                      ? entry.totalSales === peakMonthlySales && peakMonthlySales > 0
+                      : entry.receiptCount === peakMonthlyCount && peakMonthlyCount > 0;
+                    return (
+                      <Cell
+                        key={`bar-cell-${index}`}
+                        fill={isPeak ? '#0f172a' : '#475569'}
+                      />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Chart Legend / Guide */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-slate-900 inline-block" />
+              <span className="font-medium text-slate-700">Bulan Tertinggi</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-slate-600 inline-block" />
+              <span className="font-medium text-slate-700">Bulan Reguler</span>
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400">
+            Arahkan kursor atau sentuh grafik batang untuk rincian statistik
+          </span>
+        </div>
       </div>
 
       {/* Best Sellers & Top Items Grid */}
