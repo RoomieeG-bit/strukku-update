@@ -124,6 +124,22 @@ export default function App() {
     return [];
   });
 
+  // Archived receipts log (receipts stored away for clean ledger & record-keeping)
+  const [archivedHistory, setArchivedHistory] = useState<Receipt[]>(() => {
+    const stored = localStorage.getItem('strukku_archived_history');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing local storage archived history:', e);
+      }
+    }
+    return [];
+  });
+
   // Active receipt state in the editor
   const [receipt, setReceipt] = useState<Receipt>(() => {
     return getFreshDefaultReceipt();
@@ -152,6 +168,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_trash_history', JSON.stringify(trashHistory));
   }, [trashHistory]);
+
+  // Sync archivedHistory state with localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_archived_history', JSON.stringify(archivedHistory));
+  }, [archivedHistory]);
 
   // Show a brief visual toast notification
   const showToast = (message: string) => {
@@ -313,6 +334,101 @@ export default function App() {
     showToast('Kotak Sampah berhasil dikosongkan.');
   };
 
+  // Archive a specific receipt from active history
+  const handleArchiveReceipt = (id: string) => {
+    const itemToArchive = history.find((item) => item.id === id);
+    if (!itemToArchive) return;
+
+    const archivedItem: Receipt = {
+      ...itemToArchive,
+      isArchived: true,
+      archivedAt: new Date().toISOString(),
+    };
+
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+    setArchivedHistory((prev) => [archivedItem, ...prev.filter((item) => item.id !== id)]);
+    showToast(`📦 Struk #${itemToArchive.transactionId.split('/')[0]} berhasil diarsipkan!`);
+  };
+
+  // Archive all active receipts
+  const handleArchiveAllHistory = () => {
+    if (history.length === 0) return;
+    const now = new Date().toISOString();
+    const count = history.length;
+    const archivedItems: Receipt[] = history.map((item) => ({
+      ...item,
+      isArchived: true,
+      archivedAt: item.archivedAt || now,
+    }));
+
+    const archivedIds = new Set(archivedItems.map((item) => item.id));
+    setArchivedHistory((prev) => [...archivedItems, ...prev.filter((item) => !archivedIds.has(item.id))]);
+    setHistory([]);
+    showToast(`📦 ${count} transaksi berhasil dipindahkan ke Struk Yang Di Arsipkan!`);
+  };
+
+  // Restore/unarchive a specific receipt back to active history
+  const handleUnarchiveReceipt = (id: string) => {
+    const itemToRestore = archivedHistory.find((item) => item.id === id);
+    if (!itemToRestore) return;
+
+    const restoredItem: Receipt = {
+      ...itemToRestore,
+      isArchived: false,
+      archivedAt: undefined,
+    };
+
+    setArchivedHistory((prev) => prev.filter((item) => item.id !== id));
+    setHistory((prev) => [restoredItem, ...prev.filter((item) => item.id !== id)]);
+    showToast(`📂 Struk #${itemToRestore.transactionId.split('/')[0]} dikembalikan ke Riwayat Aktif!`);
+  };
+
+  // Unarchive all archived receipts back to active history
+  const handleUnarchiveAll = () => {
+    if (archivedHistory.length === 0) return;
+    const count = archivedHistory.length;
+    const restoredItems: Receipt[] = archivedHistory.map((item) => ({
+      ...item,
+      isArchived: false,
+      archivedAt: undefined,
+    }));
+
+    const restoredIds = new Set(restoredItems.map((item) => item.id));
+    setHistory((prev) => [...restoredItems, ...prev.filter((item) => !restoredIds.has(item.id))]);
+    setArchivedHistory([]);
+    showToast(`📂 ${count} struk arsip berhasil dikembalikan ke Riwayat Aktif!`);
+  };
+
+  // Move an archived receipt to trash
+  const handleDeleteArchivedReceipt = (id: string) => {
+    const itemToDelete = archivedHistory.find((item) => item.id === id);
+    if (!itemToDelete) return;
+
+    const markedItem: Receipt = {
+      ...itemToDelete,
+      deletedAt: new Date().toISOString(),
+    };
+
+    setArchivedHistory((prev) => prev.filter((item) => item.id !== id));
+    setTrashHistory((prev) => [markedItem, ...prev.filter((item) => item.id !== id)]);
+    showToast(`🗑️ Struk arsip #${itemToDelete.transactionId.split('/')[0]} dipindahkan ke Sampah.`);
+  };
+
+  // Move all archived receipts to trash
+  const handleClearArchivedHistory = () => {
+    if (archivedHistory.length === 0) return;
+    const now = new Date().toISOString();
+    const count = archivedHistory.length;
+    const markedItems: Receipt[] = archivedHistory.map((item) => ({
+      ...item,
+      deletedAt: item.deletedAt || now,
+    }));
+
+    setTrashHistory((prev) => [...markedItems, ...prev]);
+    setArchivedHistory([]);
+    showToast(`${count} struk arsip dipindahkan ke Sampah.`);
+  };
+
   // Import JSON backup (legacy history only)
   const handleImportHistory = (importedList: Receipt[]) => {
     setHistory(importedList);
@@ -327,6 +443,7 @@ export default function App() {
       console.error('Error clearing localStorage:', e);
     }
     setHistory([]);
+    setArchivedHistory([]);
     setTrashHistory([]);
     setCurrencySymbol('Rp');
     setReceipt(getFreshDefaultReceipt());
@@ -336,6 +453,7 @@ export default function App() {
   // Full backup restore (including pinned receipts, custom presets, currency, active draft)
   const handleRestoreBackup = (backupData: {
     history?: Receipt[];
+    archivedHistory?: Receipt[];
     customPresets?: any[];
     currencySymbol?: string;
     activeReceipt?: Receipt;
@@ -343,6 +461,10 @@ export default function App() {
     if (Array.isArray(backupData.history)) {
       setHistory(backupData.history);
       localStorage.setItem('strukku_history', JSON.stringify(backupData.history));
+    }
+    if (Array.isArray(backupData.archivedHistory)) {
+      setArchivedHistory(backupData.archivedHistory);
+      localStorage.setItem('strukku_archived_history', JSON.stringify(backupData.archivedHistory));
     }
     if (Array.isArray(backupData.customPresets)) {
       localStorage.setItem('strukku_custom_presets', JSON.stringify(backupData.customPresets));
@@ -487,11 +609,18 @@ export default function App() {
           <div className="h-full">
             <ReceiptHistory
               history={history}
+              archivedHistory={archivedHistory}
               trashHistory={trashHistory}
               onLoadReceipt={handleLoadReceipt}
               onTogglePinReceipt={handleTogglePinReceipt}
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
+              onArchiveReceipt={handleArchiveReceipt}
+              onArchiveAllHistory={handleArchiveAllHistory}
+              onUnarchiveReceipt={handleUnarchiveReceipt}
+              onUnarchiveAll={handleUnarchiveAll}
+              onDeleteArchivedReceipt={handleDeleteArchivedReceipt}
+              onClearArchivedHistory={handleClearArchivedHistory}
               onRestoreReceipt={handleRestoreReceipt}
               onRestoreAllTrash={handleRestoreAllTrash}
               onPermanentDeleteReceipt={handlePermanentDeleteReceipt}

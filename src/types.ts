@@ -104,6 +104,8 @@ export interface Receipt {
   customLabels?: CustomLabel[];
   isPinned?: boolean; // Pinned to top of ledger history
   isFavorite?: boolean;
+  isArchived?: boolean; // Archived receipt saved for records
+  archivedAt?: string; // ISO timestamp when receipt was archived
   deletedAt?: string; // ISO string when receipt was moved to trash
 }
 
