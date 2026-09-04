@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Receipt } from '../types';
-import { formatCurrency, formatDateTime } from '../utils';
+import { formatCurrency, formatDateTime, exportReceiptsToCSV } from '../utils';
 import { 
   Search, 
   Trash2, 
@@ -90,6 +90,7 @@ export default function ReceiptHistory({
   const [dateFilter, setDateFilter] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [csvExportSuccess, setCsvExportSuccess] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -216,6 +217,34 @@ export default function ReceiptHistory({
     setSearchTerm('');
     setMethodFilter('ALL');
     setDateFilter('');
+  };
+
+  // Export active transactions to CSV for Microsoft Excel
+  const handleExportCSV = () => {
+    // If filtering is applied and has results, export filtered items; otherwise export all history
+    const listToExport = filteredHistory.length > 0 ? filteredHistory : history;
+    if (listToExport.length === 0) return;
+
+    const isFiltered = Boolean(searchTerm.trim() || methodFilter !== 'ALL' || dateFilter);
+    const prefix = isFiltered ? 'Strukku_Transaksi_Filter' : 'Strukku_Transaksi_Ledger';
+
+    const success = exportReceiptsToCSV(listToExport, prefix);
+    if (success) {
+      setCsvExportSuccess(`Berhasil mengunduh ${listToExport.length} transaksi ke format CSV untuk Excel!`);
+      setTimeout(() => setCsvExportSuccess(null), 4000);
+    }
+  };
+
+  // Export archived transactions to CSV for Microsoft Excel
+  const handleExportArchivedCSV = () => {
+    const listToExport = filteredArchivedHistory.length > 0 ? filteredArchivedHistory : archivedHistory;
+    if (listToExport.length === 0) return;
+
+    const success = exportReceiptsToCSV(listToExport, 'Strukku_Arsip_Transaksi');
+    if (success) {
+      setCsvExportSuccess(`Berhasil mengunduh ${listToExport.length} struk arsip ke format CSV untuk Excel!`);
+      setTimeout(() => setCsvExportSuccess(null), 4000);
+    }
   };
 
   // Backup history as JSON file download
@@ -374,14 +403,28 @@ export default function ReceiptHistory({
         {/* Action Controls based on active Tab */}
         {activeTab === 'active' ? (
           <div className="flex flex-wrap items-center gap-2">
+            {/* Ekspor ke CSV Button */}
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              disabled={history.length === 0}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 disabled:opacity-50 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+              title="Ekspor daftar transaksi ke format CSV untuk Microsoft Excel & Spreadsheet"
+              id="btn-export-csv"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Ekspor ke CSV</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportJSON}
               disabled={history.length === 0}
               className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
               title="Download Backup Riwayat (.json)"
+              id="btn-export-json"
             >
-              <Download className="w-3.5 h-3.5" /> Ekspor
+              <Download className="w-3.5 h-3.5" /> Ekspor JSON
             </button>
             
             <label className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
@@ -439,6 +482,18 @@ export default function ReceiptHistory({
           <div className="flex flex-wrap items-center gap-2">
             {archivedHistory.length > 0 && (
               <>
+                {/* Ekspor Arsip ke CSV Button */}
+                <button
+                  type="button"
+                  onClick={handleExportArchivedCSV}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                  title="Ekspor daftar struk arsip ke format CSV untuk Microsoft Excel"
+                  id="btn-export-archived-csv"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Ekspor ke CSV</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleTriggerUnarchiveAll}
@@ -521,6 +576,22 @@ export default function ReceiptHistory({
       {importSuccess && (
         <div className="mx-5 mt-4 p-3 bg-slate-900/5 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-slate-900" /> Riwayat transaksi berhasil diimpor!
+        </div>
+      )}
+      {csvExportSuccess && (
+        <div className="mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium flex items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{csvExportSuccess}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCsvExportSuccess(null)}
+            className="p-1 text-emerald-600 hover:text-emerald-900 rounded cursor-pointer"
+            title="Tutup pemberitahuan"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -838,25 +909,38 @@ export default function ReceiptHistory({
 
           {/* Ledger Stats Bar */}
           {filteredHistory.length > 0 && (
-            <div className="bg-slate-50 border-t border-slate-100 p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center shrink-0">
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Omset</span>
-                <span className="text-sm font-mono font-bold text-slate-800">
-                  {formatCurrency(totalRevenue, currencySymbol)}
-                </span>
+            <div className="bg-slate-50 border-t border-slate-100 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center flex-1 w-full">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Omset</span>
+                  <span className="text-sm font-mono font-bold text-slate-800">
+                    {formatCurrency(totalRevenue, currencySymbol)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Struk Terpilih</span>
+                  <span className="text-sm font-bold text-slate-800">
+                    {filteredHistory.length} Transaksi
+                  </span>
+                </div>
+                <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rata-rata Transaksi</span>
+                  <span className="text-sm font-mono font-bold text-slate-800">
+                    {formatCurrency(totalRevenue / filteredHistory.length, currencySymbol)}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Struk Terpilih</span>
-                <span className="text-sm font-bold text-slate-800">
-                  {filteredHistory.length} Transaksi
-                </span>
-              </div>
-              <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rata-rata Transaksi</span>
-                <span className="text-sm font-mono font-bold text-slate-800">
-                  {formatCurrency(totalRevenue / filteredHistory.length, currencySymbol)}
-                </span>
-              </div>
+
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Unduh seluruh data transaksi saat ini ke berkas CSV Excel"
+                id="btn-export-csv-stats"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Ekspor ke CSV ({filteredHistory.length})</span>
+              </button>
             </div>
           )}
         </>
@@ -1158,25 +1242,38 @@ export default function ReceiptHistory({
 
           {/* Archived Bottom Stats Bar */}
           {filteredArchivedHistory.length > 0 && (
-            <div className="bg-amber-50/50 border-t border-amber-100 p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-center shrink-0">
-              <div>
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Total Nilai Arsip</span>
-                <span className="text-sm font-mono font-bold text-amber-950">
-                  {formatCurrency(totalArchivedRevenue, currencySymbol)}
-                </span>
+            <div className="bg-amber-50/50 border-t border-amber-100 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center flex-1 w-full">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Total Nilai Arsip</span>
+                  <span className="text-sm font-mono font-bold text-amber-950">
+                    {formatCurrency(totalArchivedRevenue, currencySymbol)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Struk Terarsip</span>
+                  <span className="text-sm font-bold text-amber-950">
+                    {filteredArchivedHistory.length} Transaksi
+                  </span>
+                </div>
+                <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-amber-200/70 pt-2 sm:pt-0">
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Total Item Terarsip</span>
+                  <span className="text-sm font-bold text-amber-950">
+                    {totalArchivedItemsCount} pcs
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Struk Terarsip</span>
-                <span className="text-sm font-bold text-amber-950">
-                  {filteredArchivedHistory.length} Transaksi
-                </span>
-              </div>
-              <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-amber-200/70 pt-2 sm:pt-0">
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Total Item Terarsip</span>
-                <span className="text-sm font-bold text-amber-950">
-                  {totalArchivedItemsCount} pcs
-                </span>
-              </div>
+
+              <button
+                type="button"
+                onClick={handleExportArchivedCSV}
+                className="w-full sm:w-auto px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+                title="Unduh seluruh struk arsip saat ini ke berkas CSV Excel"
+                id="btn-export-archived-csv-stats"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Ekspor ke CSV ({filteredArchivedHistory.length})</span>
+              </button>
             </div>
           )}
         </>

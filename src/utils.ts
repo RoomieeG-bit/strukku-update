@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Item, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from './types';
+import { Item, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont, Receipt } from './types';
 
 export const DEFAULT_RECEIPT_LABELS: Required<ReceiptLabels> = {
   transactionIdLabel: 'No. Bon:',
@@ -526,3 +526,97 @@ export function calculateTotals(
     total: Math.max(0, total),
   };
 }
+
+/**
+ * Exports a list of receipts into a clean, Excel-compatible CSV file with UTF-8 BOM.
+ * Formats numbers, dates, and item breakdowns cleanly for spreadsheet analysis.
+ */
+export function exportReceiptsToCSV(
+  receipts: Receipt[],
+  filenamePrefix = 'Strukku_Transaksi_Ledger'
+): boolean {
+  if (!receipts || receipts.length === 0) return false;
+
+  const headers = [
+    'No',
+    'ID Transaksi',
+    'Tanggal & Waktu',
+    'Nama Toko',
+    'Alamat Toko',
+    'Telepon Toko',
+    'Kasir',
+    'Nama Pelanggan',
+    'Metode Pembayaran',
+    'Status Pembayaran',
+    'Total Item (Qty)',
+    'Rincian Item & Harga',
+    'Subtotal',
+    'Diskon',
+    'Pajak / PPN',
+    'Total Akhir',
+    'Tunai Diterima',
+    'Kembalian',
+    'Catatan / Footer',
+    'Status Arsip'
+  ];
+
+  const escapeCSV = (val: unknown): string => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = receipts.map((r, index) => {
+    const totalQty = (r.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+    const itemsDetail = (r.items || [])
+      .map((item) => {
+        const disc = item.discountRate ? ` [Diskon ${item.discountRate}%]` : '';
+        return `${item.name} (${item.quantity}x @${item.price}${disc})`;
+      })
+      .join('; ');
+
+    let paymentStatusLabel = 'Lunas';
+    if (r.paymentStatus === 'BELUM_LUNAS') paymentStatusLabel = 'Belum Lunas';
+    else if (r.paymentStatus === 'HUTANG') paymentStatusLabel = 'Hutang / Bon';
+
+    return [
+      escapeCSV(index + 1),
+      escapeCSV(r.transactionId),
+      escapeCSV(formatDateTime(r.dateTime)),
+      escapeCSV(r.storeName || '-'),
+      escapeCSV(r.storeAddress || '-'),
+      escapeCSV(r.storePhone || '-'),
+      escapeCSV(r.cashierName || '-'),
+      escapeCSV(r.customerName || '-'),
+      escapeCSV(r.paymentMethod || '-'),
+      escapeCSV(paymentStatusLabel),
+      escapeCSV(totalQty),
+      escapeCSV(itemsDetail),
+      escapeCSV(r.subtotal ?? 0),
+      escapeCSV(r.discountAmount ?? 0),
+      escapeCSV(r.taxAmount ?? 0),
+      escapeCSV(r.total ?? 0),
+      escapeCSV(r.cashReceived ?? 0),
+      escapeCSV(r.changeAmount ?? 0),
+      escapeCSV(r.notesFooter || '-'),
+      escapeCSV(r.isArchived ? 'Diarsipkan' : 'Aktif')
+    ].join(',');
+  });
+
+  // UTF-8 BOM (\uFEFF) ensures Microsoft Excel properly renders Indonesian characters, accents, and symbols
+  const csvContent = '\uFEFF' + [headers.map(escapeCSV).join(','), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+  downloadLink.setAttribute('href', url);
+  downloadLink.setAttribute('download', `${filenamePrefix}_${dateStr}.csv`);
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+  URL.revokeObjectURL(url);
+  return true;
+}
+
