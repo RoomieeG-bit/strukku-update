@@ -4,9 +4,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
+import { Receipt, Item, InventoryItem, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
 import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
+import InventoryTab from './InventoryTab';
+import CashierCalculatorTab from './CashierCalculatorTab';
 import { 
   Store, 
   User, 
@@ -53,7 +55,10 @@ import {
   FileUp,
   AlertTriangle,
   FolderUp,
-  FileCheck
+  FileCheck,
+  Boxes,
+  Package,
+  Calculator
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -186,7 +191,7 @@ export default function ReceiptForm({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemDiscount, setNewItemDiscount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'payment' | 'size' | 'fonts' | 'labels' | 'code' | 'templates'>('store');
+  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'templates'>('store');
   const [labelSubTab, setLabelSubTab] = useState<'CUSTOM' | 'STANDARD' | 'PRESETS'>('CUSTOM');
   const [newCustomLabel, setNewCustomLabel] = useState('');
   const [newCustomValue, setNewCustomValue] = useState('');
@@ -493,6 +498,31 @@ export default function ReceiptForm({
     handleRecalculate({ items: updatedItems });
   };
 
+  // Load item directly from Inventory Catalog into receipt items
+  const handleLoadInventoryItemToReceipt = (invItem: InventoryItem, qty: number) => {
+    const existingIndex = receipt.items.findIndex(
+      (it) => it.name.toLowerCase().trim() === invItem.name.toLowerCase().trim()
+    );
+
+    let updatedItems: Item[];
+    if (existingIndex >= 0) {
+      updatedItems = receipt.items.map((it, idx) =>
+        idx === existingIndex ? { ...it, quantity: it.quantity + qty } : it
+      );
+    } else {
+      const newItem: Item = {
+        id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: invItem.name,
+        price: invItem.price,
+        quantity: qty,
+        discountRate: invItem.discountRate || 0,
+      };
+      updatedItems = [...receipt.items, newItem];
+    }
+
+    handleRecalculate({ items: updatedItems });
+  };
+
   // Regenerate Transaction ID
   const handleRegenerateTxId = () => {
     handleRecalculate({ transactionId: generateTransactionId() });
@@ -614,6 +644,19 @@ export default function ReceiptForm({
           )}
         </button>
         <button
+          onClick={() => setActiveTab('inventory')}
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'inventory'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+          }`}
+          id="tab-inventory"
+        >
+          <Boxes className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+          <span className="hidden md:inline">Barang Inventaris</span>
+          <span className="md:hidden">Inventaris</span>
+        </button>
+        <button
           onClick={() => setActiveTab('payment')}
           className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'payment'
@@ -625,6 +668,19 @@ export default function ReceiptForm({
           <Percent className="w-3.5 h-3.5 shrink-0" />
           <span className="hidden md:inline">Pembayaran & Pajak</span>
           <span className="md:hidden">Bayar</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('calculator')}
+          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'calculator'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+          }`}
+          id="tab-calculator"
+        >
+          <Calculator className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+          <span className="hidden md:inline">Kalkulator</span>
+          <span className="md:hidden">Hitung</span>
         </button>
         <button
           onClick={() => setActiveTab('size')}
@@ -1045,6 +1101,20 @@ export default function ReceiptForm({
         {/* TAB 2: ITEMS IN THE RECEIPT */}
         {activeTab === 'items' && (
           <div className="space-y-4" id="form-section-items">
+            {/* Quick Banner to Inventory Tab */}
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-2.5 px-3 flex items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2 text-xs text-emerald-950 font-medium">
+                <Boxes className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Punya katalog barang tetap? Buka tab <strong>Barang Inventaris</strong> untuk muat langsung ke struk!</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('inventory')}
+                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition cursor-pointer shrink-0 shadow-2xs"
+              >
+                Buka Inventaris
+              </button>
+            </div>
             
             {/* Quick Add Grid */}
             <div>
@@ -1265,6 +1335,15 @@ export default function ReceiptForm({
           </div>
         )}
 
+        {/* TAB INVENTORY: BARANG INVENTARIS */}
+        {activeTab === 'inventory' && (
+          <InventoryTab
+            onLoadItemToReceipt={handleLoadInventoryItemToReceipt}
+            currentReceiptItems={receipt.items}
+            currencySymbol={currencySymbol}
+          />
+        )}
+
         {/* TAB 3: PAYMENT, TAX & DISCOUNTS */}
         {activeTab === 'payment' && (
           <div className="space-y-4" id="form-section-payment">
@@ -1439,10 +1518,34 @@ export default function ReceiptForm({
                       {currencySymbol} {receipt.changeAmount.toLocaleString('id-ID')}
                     </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('calculator')}
+                    className="w-full mt-2 py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Hitung Kembalian di Kalkulator Kasir Mini →</span>
+                  </button>
                 </div>
               )}
             </div>
           </div>
+        )}
+
+        {/* TAB KALKULATOR KASIR MINI */}
+        {activeTab === 'calculator' && (
+          <CashierCalculatorTab
+            receiptTotal={receipt.total}
+            currentCashReceived={receipt.cashReceived || 0}
+            currencySymbol={currencySymbol}
+            onApplyCashPayment={(cashReceived) => {
+              handleRecalculate({
+                paymentMethod: 'CASH',
+                cashReceived: cashReceived,
+              });
+            }}
+          />
         )}
 
         {/* TAB: UKURAN KERTAS & THERMAL PRINTER CONFIGURATION */}

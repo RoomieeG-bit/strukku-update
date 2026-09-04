@@ -65,6 +65,20 @@ export interface Item {
   discountRate?: number; // item-level percentage-based discount, e.g. 10 for 10%
 }
 
+export interface InventoryItem {
+  id: string;
+  name: string;
+  price: number;
+  category?: string;
+  unit?: string; // e.g. pcs, botol, porsi, bungkus, kg, cup
+  sku?: string;
+  barcode?: string;
+  stock?: number;
+  discountRate?: number;
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface Receipt {
   id: string;
   storeName: string;

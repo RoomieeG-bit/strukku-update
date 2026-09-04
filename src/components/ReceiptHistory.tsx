@@ -35,7 +35,9 @@ import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
-  Info
+  Info,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 
 interface ReceiptHistoryProps {
@@ -82,6 +84,23 @@ export default function ReceiptHistory({
   currencySymbol,
 }: ReceiptHistoryProps) {
   const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'trash'>('active');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    try {
+      const saved = localStorage.getItem('strukku_history_view_mode');
+      return (saved === 'grid' || saved === 'list') ? saved : 'list';
+    } catch (e) {
+      return 'list';
+    }
+  });
+
+  const handleToggleViewMode = (mode: 'list' | 'grid') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('strukku_history_view_mode', mode);
+    } catch (e) {
+      console.error('Error saving viewMode to localStorage:', e);
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [archivedSearchTerm, setArchivedSearchTerm] = useState('');
   const [trashSearchTerm, setTrashSearchTerm] = useState('');
@@ -660,37 +679,71 @@ export default function ReceiptHistory({
                 </div>
               </div>
 
-              {/* Results Count, Quick Pinned Filter & Reset Filter Indicator */}
-              <div className="flex items-center gap-2 text-xs flex-wrap">
-                {pinnedCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setMethodFilter(prev => prev === 'PINNED' ? 'ALL' : 'PINNED')}
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer border ${
-                      methodFilter === 'PINNED'
-                        ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
-                        : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
-                    }`}
-                    title="Tampilkan hanya struk yang disematkan / di-pin"
-                  >
-                    <Pin className={`w-3 h-3 ${methodFilter === 'PINNED' ? 'fill-slate-950' : 'fill-amber-600'}`} />
-                    <span>Disematkan ({pinnedCount})</span>
-                  </button>
-                )}
+              {/* Results Count, Quick Pinned Filter, Reset Filter Indicator & View Mode Toggle */}
+              <div className="flex items-center justify-between gap-3 text-xs flex-wrap w-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {pinnedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setMethodFilter(prev => prev === 'PINNED' ? 'ALL' : 'PINNED')}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer border ${
+                        methodFilter === 'PINNED'
+                          ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-2xs'
+                          : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                      }`}
+                      title="Tampilkan hanya struk yang disematkan / di-pin"
+                    >
+                      <Pin className={`w-3 h-3 ${methodFilter === 'PINNED' ? 'fill-slate-950' : 'fill-amber-600'}`} />
+                      <span>Disematkan ({pinnedCount})</span>
+                    </button>
+                  )}
 
-                <span className="text-slate-500 font-medium">
-                  <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {history.length} transaksi
-                </span>
-                {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
+                  <span className="text-slate-500 font-medium">
+                    <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {history.length} transaksi
+                  </span>
+                  {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
+                    <button
+                      type="button"
+                      onClick={handleClearFilters}
+                      className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
+                      id="reset-all-filters-btn"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Reset Filter
+                    </button>
+                  )}
+                </div>
+
+                {/* Switch View Toggle (List vs Grid) */}
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-2xs" id="history-view-mode-toggle">
                   <button
                     type="button"
-                    onClick={handleClearFilters}
-                    className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
-                    id="reset-all-filters-btn"
+                    onClick={() => handleToggleViewMode('list')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      viewMode === 'list'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Tampilan Format List Vertikal"
+                    id="btn-view-list"
                   >
-                    <RefreshCw className="w-3 h-3" /> Reset Filter
+                    <List className="w-3.5 h-3.5" />
+                    <span>List</span>
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleViewMode('grid')}
+                    className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                    title="Tampilan Format Grid Kartu Ringkas"
+                    id="btn-view-grid"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Grid Kartu</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -720,7 +773,7 @@ export default function ReceiptHistory({
                   </button>
                 )}
               </div>
-            ) : (
+            ) : viewMode === 'list' ? (
               <div className="divide-y divide-slate-100" id="history-items-list">
                 {sortedHistory.map((item) => {
                   const isPinned = Boolean(item.isPinned || item.isFavorite);
@@ -904,6 +957,179 @@ export default function ReceiptHistory({
                   );
                 })}
               </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 p-4" id="history-items-grid">
+                {sortedHistory.map((item) => {
+                  const isPinned = Boolean(item.isPinned || item.isFavorite);
+                  const totalQty = item.items.reduce((sum, i) => sum + i.quantity, 0);
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`bg-white rounded-xl border p-4 transition-all flex flex-col justify-between relative group shadow-2xs hover:shadow-xs ${
+                        isPinned 
+                          ? 'border-amber-300 bg-gradient-to-b from-amber-50/40 to-white ring-1 ring-amber-300/60' 
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                      id={`grid-receipt-${item.id}`}
+                    >
+                      <div>
+                        {/* Badges & Store Name */}
+                        <div className="mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            {isPinned && (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 flex items-center gap-1 shadow-2xs">
+                                <Pin className="w-2.5 h-2.5 fill-slate-950" /> Pin
+                              </span>
+                            )}
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              item.paymentMethod === 'CASH'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                            }`}>
+                              {item.paymentMethod}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                            }`}>
+                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                               (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
+                            </span>
+                            {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
+                              <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 truncate max-w-[90px]">
+                                {item.fontFamily === 'EAS' ? 'EAS' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit' : item.fontFamily === 'DOT_MATRIX' ? 'Dot' : item.fontFamily}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-sm truncate font-display" title={item.storeName}>
+                            {item.storeName}
+                          </h4>
+                        </div>
+
+                        {/* Meta Box: Tx ID, Date, User */}
+                        <div className="space-y-1.5 text-xs text-slate-500 mb-3 bg-slate-50/70 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-mono text-slate-700 font-semibold truncate max-w-[170px]" title={item.transactionId}>
+                              #{item.transactionId}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                              className="p-0.5 text-slate-400 hover:text-slate-800 rounded transition cursor-pointer"
+                              title="Salin ID Transaksi"
+                            >
+                              {copiedId === item.transactionId ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{formatDateTime(item.dateTime).split(' ')[0]}</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-slate-600 truncate max-w-[120px]" title={item.customerName ? `Pelanggan: ${item.customerName}` : `Kasir: ${item.cashierName}`}>
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span className="truncate">{item.customerName || item.cashierName}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Items Preview Chips */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1.5">
+                            <span>Barang</span>
+                            <span className="text-slate-700 font-bold">{totalQty} pcs ({item.items.length} item)</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {item.items.slice(0, 3).map((it, idx) => {
+                              const isItemMatched = searchTerm && it.name.toLowerCase().includes(searchTerm.toLowerCase().trim());
+                              return (
+                                <span
+                                  key={idx}
+                                  onClick={() => setSearchTerm(it.name)}
+                                  className={`text-[10px] px-2 py-0.5 rounded-md transition cursor-pointer truncate max-w-[130px] ${
+                                    isItemMatched
+                                      ? 'bg-slate-900 text-white font-bold'
+                                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                  }`}
+                                  title={`Cari item: ${it.name}`}
+                                >
+                                  {it.name} <span className="font-bold text-slate-900">x{it.quantity}</span>
+                                </span>
+                              );
+                            })}
+                            {item.items.length > 3 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold">
+                                +{item.items.length - 3} lainnya
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Bottom: Total Amount and Action Grid */}
+                      <div className="border-t border-slate-100 pt-3 mt-1">
+                        <div className="flex items-baseline justify-between mb-2.5">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total</span>
+                          <span className="text-base font-mono font-bold text-slate-900">
+                            {formatCurrency(item.total, currencySymbol)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onTogglePinReceipt?.(item.id)}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer ${
+                              isPinned
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                : 'bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-800'
+                            }`}
+                            title={isPinned ? 'Lepas Sematan (Unpin)' : 'Sematkan ke Paling Atas (Pin)'}
+                          >
+                            <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-amber-600 text-amber-800' : 'text-slate-500'}`} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onArchiveReceipt?.(item.id)}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-amber-50 text-slate-600 hover:text-amber-800 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+                            title="Arsipkan struk ini"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onLoadReceipt(item)}
+                            className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                            title="Muat ke Generator POS"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Muat</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteReceipt(item.id)}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+                            title="Pindahkan ke Sampah"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
@@ -1011,7 +1237,35 @@ export default function ReceiptHistory({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  {/* View Mode Toggle in Archived Tab */}
+                  <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleViewMode('list')}
+                      className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                        viewMode === 'list'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Format List Vertikal"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleViewMode('grid')}
+                      className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                        viewMode === 'grid'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Format Grid Kartu Ringkas"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
                   <select
                     value={archivedMethodFilter}
                     onChange={(e) => setArchivedMethodFilter(e.target.value)}
@@ -1085,7 +1339,7 @@ export default function ReceiptHistory({
                   Hapus Kata Kunci
                 </button>
               </div>
-            ) : (
+            ) : viewMode === 'list' ? (
               <div className="divide-y divide-slate-100">
                 {filteredArchivedHistory.map((item) => (
                   <div
@@ -1236,6 +1490,141 @@ export default function ReceiptHistory({
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 p-4" id="archived-items-grid">
+                {filteredArchivedHistory.map((item) => {
+                  const totalQty = item.items.reduce((sum, i) => sum + i.quantity, 0);
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="bg-white rounded-xl border border-amber-200/80 p-4 transition-all flex flex-col justify-between relative group shadow-2xs hover:shadow-xs hover:border-amber-300"
+                    >
+                      <div>
+                        {/* Header badges */}
+                        <div className="mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                              <Archive className="w-2.5 h-2.5" /> Arsip
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                              {item.paymentMethod}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                                : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                            }`}>
+                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                               (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-slate-900 text-sm truncate font-display" title={item.storeName}>
+                            {item.storeName}
+                          </h4>
+                        </div>
+
+                        {/* Meta Box */}
+                        <div className="space-y-1.5 text-xs text-slate-500 mb-3 bg-amber-50/40 p-2.5 rounded-lg border border-amber-100/60">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-mono text-slate-700 font-semibold truncate max-w-[170px]" title={item.transactionId}>
+                              #{item.transactionId}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                              className="p-0.5 text-slate-400 hover:text-slate-800 rounded transition cursor-pointer"
+                              title="Salin ID Transaksi"
+                            >
+                              {copiedId === item.transactionId ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{formatDateTime(item.dateTime).split(' ')[0]}</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-slate-600 truncate max-w-[120px]" title={item.customerName ? `Pelanggan: ${item.customerName}` : `Kasir: ${item.cashierName}`}>
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span className="truncate">{item.customerName || item.cashierName}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Items preview */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1.5">
+                            <span>Barang</span>
+                            <span className="text-slate-700 font-bold">{totalQty} pcs ({item.items.length} item)</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {item.items.slice(0, 3).map((it, idx) => (
+                              <span
+                                key={idx}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 truncate max-w-[130px]"
+                              >
+                                {it.name} <span className="font-bold text-slate-900">x{it.quantity}</span>
+                              </span>
+                            ))}
+                            {item.items.length > 3 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold">
+                                +{item.items.length - 3} lainnya
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Total & Actions */}
+                      <div className="border-t border-slate-100 pt-3 mt-1">
+                        <div className="flex items-baseline justify-between mb-2.5">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total</span>
+                          <span className="text-base font-mono font-bold text-slate-900">
+                            {formatCurrency(item.total, currencySymbol)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onUnarchiveReceipt?.(item.id)}
+                            className="py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                            title="Keluarkan dari Arsip"
+                          >
+                            <ArchiveRestore className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Buka Arsip</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onLoadReceipt(item)}
+                            className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
+                            title="Muat ke Generator POS"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Muat</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteArchivedReceipt?.(item.id)}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+                            title="Pindahkan ke Sampah"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
