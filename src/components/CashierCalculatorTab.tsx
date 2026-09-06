@@ -54,8 +54,8 @@ export default function CashierCalculatorTab({
 }: CashierCalculatorTabProps) {
   // Bill total (synced with receiptTotal by default, but editable)
   const [billAmount, setBillAmount] = useState<number>(receiptTotal);
-  // Cash tendered by customer
-  const [cashTendered, setCashTendered] = useState<number>(currentCashReceived > 0 ? currentCashReceived : 0);
+  // Cash tendered by customer (defaults to uang pas: currentCashReceived or receiptTotal)
+  const [cashTendered, setCashTendered] = useState<number>(currentCashReceived > 0 ? currentCashReceived : receiptTotal);
   
   // Denomination counts map (e.g. { 100000: 1, 50000: 2 })
   const [denomCounts, setDenomCounts] = useState<Record<number, number>>({});

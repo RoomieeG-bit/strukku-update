@@ -412,8 +412,20 @@ export default function ReceiptForm({
       nextReceipt.discountType
     );
 
+    // Otomatis set uang pas di awal pembuatan struk:
+    // Jika kasir belum memasukkan nominal tunai kustom, atau uang tunai sebelumnya pas dengan total,
+    // maka sinkronkan nominal bayar tunai dengan total tagihan baru (uang pas).
+    let nextCashReceived = nextReceipt.cashReceived;
+    if (updatedFields.cashReceived === undefined && nextReceipt.paymentMethod === 'CASH') {
+      const wasZeroOrEmpty = !receipt.cashReceived || receipt.cashReceived === 0;
+      const wasExactCash = receipt.cashReceived === receipt.total;
+      if (wasZeroOrEmpty || wasExactCash) {
+        nextCashReceived = total;
+      }
+    }
+
     const changeAmount = nextReceipt.paymentMethod === 'CASH' 
-      ? Math.max(0, nextReceipt.cashReceived - total)
+      ? Math.max(0, nextCashReceived - total)
       : 0;
 
     onUpdateReceipt({
@@ -422,6 +434,7 @@ export default function ReceiptForm({
       taxAmount,
       discountAmount,
       total,
+      cashReceived: nextCashReceived,
       changeAmount,
     });
   };
@@ -457,7 +470,7 @@ export default function ReceiptForm({
       taxAmount,
       discountAmount,
       total,
-      cashReceived: preset.taxRate === 0 && preset.discountRate === 0 ? 0 : total,
+      cashReceived: total,
       changeAmount: 0,
       logoType: preset.logoType,
     });
@@ -1502,25 +1515,48 @@ export default function ReceiptForm({
                   </div>
 
                   {/* Cash Suggestion Quick Buttons */}
-                  <div className="grid grid-cols-4 gap-1">
-                    {[
-                      receipt.total,
-                      Math.ceil(receipt.total / 10000) * 10000,
-                      Math.ceil(receipt.total / 50000) * 50000,
-                      Math.ceil(receipt.total / 100000) * 100000,
-                    ]
-                      .filter((val, i, arr) => arr.indexOf(val) === i && val >= receipt.total)
-                      .slice(0, 4)
-                      .map((val) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => handleRecalculate({ cashReceived: val })}
-                          className="py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-mono font-semibold transition text-slate-600 hover:text-slate-900 hover:border-slate-450"
-                        >
-                          {val.toLocaleString('id-ID')}
-                        </button>
-                      ))}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pilihan Cepat Nominal</span>
+                      {receipt.cashReceived === receipt.total && receipt.total > 0 && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Uang Pas Aktif
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <button
+                        type="button"
+                        id="btn-set-uang-pas"
+                        onClick={() => handleRecalculate({ cashReceived: receipt.total })}
+                        className={`col-span-2 py-1.5 px-2 border rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          receipt.cashReceived === receipt.total && receipt.total > 0
+                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                            : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
+                        }`}
+                        title="Set nominal bayar sama dengan total tagihan"
+                      >
+                        <span>⚡ Uang Pas:</span>
+                        <span>{receipt.total.toLocaleString('id-ID')}</span>
+                      </button>
+                      {[
+                        Math.ceil(receipt.total / 10000) * 10000,
+                        Math.ceil(receipt.total / 50000) * 50000,
+                        Math.ceil(receipt.total / 100000) * 100000,
+                      ]
+                        .filter((val, i, arr) => arr.indexOf(val) === i && val > receipt.total)
+                        .slice(0, 2)
+                        .map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleRecalculate({ cashReceived: val })}
+                            className="py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-semibold transition text-slate-600 hover:text-slate-900 hover:border-slate-400"
+                          >
+                            {val.toLocaleString('id-ID')}
+                          </button>
+                        ))}
+                    </div>
                   </div>
 
                   {/* Change calculation */}
