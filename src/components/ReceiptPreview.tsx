@@ -5,10 +5,20 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset, CustomLabel } from '../types';
-import { formatCurrency, formatDateTime, RECEIPT_FONTS, getFontFamilyCss, PAPER_SIZE_OPTIONS, getPaperWidthMm, getReceiptLabels } from '../utils';
+import { 
+  formatCurrency, 
+  formatDateTime, 
+  RECEIPT_FONTS, 
+  getFontFamilyCss, 
+  PAPER_SIZE_OPTIONS, 
+  getPaperWidthMm, 
+  getReceiptLabels,
+  isPaymentInsufficient 
+} from '../utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
+import PaymentWarningModal, { ActionType } from './PaymentWarningModal';
 import { 
   Printer, 
   Download, 
@@ -23,7 +33,8 @@ import {
   Sliders, 
   ChevronDown,
   Plus,
-  Minus
+  Minus,
+  FileText
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -416,6 +427,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
   const [exporting, setExporting] = useState<string | null>(null);
   const [copiedTx, setCopiedTx] = useState(false);
   const [showCustomSizeModal, setShowCustomSizeModal] = useState(false);
+  const [pendingWarningAction, setPendingWarningAction] = useState<ActionType | null>(null);
 
   const labels = getReceiptLabels(receipt.labels);
 
@@ -452,8 +464,8 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
     setTimeout(() => setCopiedTx(false), 2000);
   };
 
-  // Export to Image (PNG)
-  const handleExportPNG = async () => {
+  // Execution function for PNG export
+  const executeExportPNG = async () => {
     if (!receiptRef.current) return;
     let restoreStyles: (() => void) | null = null;
     try {
@@ -476,8 +488,17 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
     }
   };
 
-  // Export to Image (JPG)
-  const handleExportJPG = async () => {
+  // Export to Image (PNG) with underpayment check
+  const handleExportPNG = () => {
+    if (isPaymentInsufficient(receipt)) {
+      setPendingWarningAction('PNG');
+      return;
+    }
+    executeExportPNG();
+  };
+
+  // Execution function for JPG export
+  const executeExportJPG = async () => {
     if (!receiptRef.current) return;
     let restoreStyles: (() => void) | null = null;
     try {
@@ -500,8 +521,17 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
     }
   };
 
-  // Export to PDF with custom exact thermal paper width
-  const handleExportPDF = async () => {
+  // Export to Image (JPG) with underpayment check
+  const handleExportJPG = () => {
+    if (isPaymentInsufficient(receipt)) {
+      setPendingWarningAction('JPG');
+      return;
+    }
+    executeExportJPG();
+  };
+
+  // Execution function for PDF export
+  const executeExportPDF = async () => {
     if (!receiptRef.current) return;
     let restoreStyles: (() => void) | null = null;
     try {
@@ -534,10 +564,43 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
     }
   };
 
-  // Print Receipt directly
-  const handlePrint = () => {
+  // Export to PDF with custom exact thermal paper width and underpayment check
+  const handleExportPDF = () => {
+    if (isPaymentInsufficient(receipt)) {
+      setPendingWarningAction('PDF');
+      return;
+    }
+    executeExportPDF();
+  };
+
+  // Execution function for Print
+  const executePrint = () => {
     updatePrintStyles(activePaperWidthMm);
     window.print();
+  };
+
+  // Print Receipt directly with underpayment check
+  const handlePrint = () => {
+    if (isPaymentInsufficient(receipt)) {
+      setPendingWarningAction('PRINT');
+      return;
+    }
+    executePrint();
+  };
+
+  // Confirmed continuation from warning dialog
+  const handleConfirmWarning = () => {
+    const action = pendingWarningAction;
+    setPendingWarningAction(null);
+    if (action === 'PNG') {
+      executeExportPNG();
+    } else if (action === 'JPG') {
+      executeExportJPG();
+    } else if (action === 'PDF') {
+      executeExportPDF();
+    } else if (action === 'PRINT') {
+      executePrint();
+    }
   };
 
   // Barcode & QR Code Generator for Receipt Footer
@@ -1325,6 +1388,19 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           <span className="font-semibold text-slate-800">Tips POS:</span> Ubah nama barang, harga, dan jumlah secara instan langsung dari tabel <strong>Daftar Barang</strong>. Preset toko membantu Anda menguji layout minimarket dalam hitungan detik.
         </div>
       </div>
+
+      {/* Confirmation Dialog: Pembayaran Kurang */}
+      <PaymentWarningModal
+        isOpen={pendingWarningAction !== null}
+        onClose={() => setPendingWarningAction(null)}
+        onConfirm={handleConfirmWarning}
+        actionType={pendingWarningAction || 'PRINT'}
+        receiptTotal={receipt.total}
+        cashReceived={receipt.cashReceived || 0}
+        paymentMethod={receipt.paymentMethod}
+        paymentStatus={receipt.paymentStatus || 'SUDAH_LUNAS'}
+        currencySymbol={currencySymbol}
+      />
     </div>
   );
 }

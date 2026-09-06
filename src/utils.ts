@@ -620,3 +620,47 @@ export function exportReceiptsToCSV(
   return true;
 }
 
+/**
+ * Checks if the payment for a receipt is insufficient / deficient (Pembayaran kurang)
+ * - CASH: cash received is less than total bill
+ * - Non-cash or Cash: payment status is marked as BELUM_LUNAS or HUTANG
+ */
+export function isPaymentInsufficient(receipt: Receipt): boolean {
+  if (!receipt || !receipt.items || receipt.items.length === 0 || receipt.total <= 0) {
+    return false;
+  }
+
+  // If status is marked as unpaid or debt
+  if (receipt.paymentStatus === 'BELUM_LUNAS' || receipt.paymentStatus === 'HUTANG') {
+    return true;
+  }
+
+  // If payment method is cash and cashReceived is strictly less than total
+  if (receipt.paymentMethod === 'CASH') {
+    const cash = typeof receipt.cashReceived === 'number' ? receipt.cashReceived : 0;
+    if (cash < receipt.total) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Calculates the deficit amount if payment is lacking
+ */
+export function getPaymentDeficit(receipt: Receipt): number {
+  if (!receipt || receipt.total <= 0) return 0;
+  if (receipt.paymentMethod === 'CASH') {
+    const cash = typeof receipt.cashReceived === 'number' ? receipt.cashReceived : 0;
+    if (cash < receipt.total) {
+      return receipt.total - cash;
+    }
+  }
+  if (receipt.paymentStatus === 'BELUM_LUNAS' || receipt.paymentStatus === 'HUTANG') {
+    const cash = typeof receipt.cashReceived === 'number' ? receipt.cashReceived : 0;
+    return Math.max(0, receipt.total - cash);
+  }
+  return 0;
+}
+

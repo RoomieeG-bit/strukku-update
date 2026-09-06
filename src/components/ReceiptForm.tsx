@@ -5,10 +5,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Item, InventoryItem, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss } from '../utils';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import InventoryTab from './InventoryTab';
 import CashierCalculatorTab from './CashierCalculatorTab';
+import PaymentWarningModal from './PaymentWarningModal';
 import { 
   Store, 
   User, 
@@ -219,6 +220,17 @@ export default function ReceiptForm({
   });
   const [fontUploadError, setFontUploadError] = useState<string>('');
   const [fontUploadSuccess, setFontUploadSuccess] = useState<string>('');
+  const [showPaymentWarningModal, setShowPaymentWarningModal] = useState(false);
+
+  // Trigger Save Receipt with underpayment confirmation check
+  const handleTriggerSave = () => {
+    if (receipt.items.length === 0) return;
+    if (isPaymentInsufficient(receipt)) {
+      setShowPaymentWarningModal(true);
+      return;
+    }
+    onSaveReceipt();
+  };
 
   // Register custom fonts whenever customFonts list changes
   useEffect(() => {
@@ -3238,7 +3250,7 @@ export default function ReceiptForm({
         </button>
         <button
           type="button"
-          onClick={onSaveReceipt}
+          onClick={handleTriggerSave}
           disabled={receipt.items.length === 0}
           className="flex-1 py-3 bg-slate-900 hover:bg-slate-950 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition active:scale-98"
           id="save-receipt-button"
@@ -3246,6 +3258,22 @@ export default function ReceiptForm({
           <FileText className="w-4 h-4" /> Simpan Struk ke Riwayat
         </button>
       </div>
+
+      {/* Confirmation Dialog: Pembayaran Kurang */}
+      <PaymentWarningModal
+        isOpen={showPaymentWarningModal}
+        onClose={() => setShowPaymentWarningModal(false)}
+        onConfirm={() => {
+          setShowPaymentWarningModal(false);
+          onSaveReceipt();
+        }}
+        actionType="SAVE"
+        receiptTotal={receipt.total}
+        cashReceived={receipt.cashReceived || 0}
+        paymentMethod={receipt.paymentMethod}
+        paymentStatus={receipt.paymentStatus || 'SUDAH_LUNAS'}
+        currencySymbol={currencySymbol}
+      />
     </div>
   );
 }
