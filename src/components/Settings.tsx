@@ -24,7 +24,9 @@ import {
   Info,
   Layers,
   ArrowDownToLine,
-  RefreshCw
+  RefreshCw,
+  Store,
+  Sparkles
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -32,12 +34,15 @@ interface SettingsProps {
   receipt: Receipt;
   currencySymbol: string;
   onSetCurrencySymbol: (currency: string) => void;
+  defaultStoreName: string;
+  onSetDefaultStoreName: (storeName: string, applyToCurrent?: boolean) => void;
   onResetAllData: () => void;
   onRestoreBackup: (backupData: {
     history?: Receipt[];
     customPresets?: any[];
     currencySymbol?: string;
     activeReceipt?: Receipt;
+    defaultStoreName?: string;
   }) => void;
   showToast: (message: string) => void;
 }
@@ -47,10 +52,14 @@ export default function Settings({
   receipt,
   currencySymbol,
   onSetCurrencySymbol,
+  defaultStoreName,
+  onSetDefaultStoreName,
   onResetAllData,
   onRestoreBackup,
   showToast,
 }: SettingsProps) {
+  const [storeNameInput, setStoreNameInput] = useState(defaultStoreName);
+  const [applyToCurrentReceipt, setApplyToCurrentReceipt] = useState(true);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [resetConfirmInput, setResetConfirmInput] = useState('');
   const [copiedBackupJson, setCopiedBackupJson] = useState(false);
@@ -123,10 +132,13 @@ export default function Settings({
         pinnedTransactions: pinnedReceiptsCount,
         totalCustomPresets: customPresets.length,
         defaultCurrency: currencySymbol,
+        defaultStoreName: defaultStoreName,
       },
       settings: {
         currency: currencySymbol,
+        defaultStoreName: defaultStoreName,
       },
+      defaultStoreName: defaultStoreName,
       customPresets: customPresets,
       history: history,
       activeDraftReceipt: receipt,
@@ -189,6 +201,7 @@ export default function Settings({
         let importedPresets: any[] = [];
         let importedCurrency: string | undefined;
         let importedActiveReceipt: Receipt | undefined;
+        let importedDefaultStoreName: string | undefined;
 
         if (Array.isArray(parsed)) {
           // Legacy array of receipts
@@ -204,12 +217,15 @@ export default function Settings({
           if (parsed.settings?.currency || parsed.currency) {
             importedCurrency = parsed.settings?.currency || parsed.currency;
           }
+          if (parsed.settings?.defaultStoreName || parsed.defaultStoreName) {
+            importedDefaultStoreName = parsed.settings?.defaultStoreName || parsed.defaultStoreName;
+          }
           if (parsed.activeDraftReceipt && typeof parsed.activeDraftReceipt === 'object') {
             importedActiveReceipt = parsed.activeDraftReceipt;
           }
         }
 
-        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency) {
+        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency && !importedDefaultStoreName) {
           setImportFeedback({
             type: 'error',
             message: 'Format file JSON tidak valid atau tidak memiliki data transaksi/preset STRUKKU.',
@@ -223,6 +239,7 @@ export default function Settings({
           customPresets: importedPresets,
           currencySymbol: importedCurrency,
           activeReceipt: importedActiveReceipt,
+          defaultStoreName: importedDefaultStoreName,
         });
 
         calculateStorageUsage();
@@ -382,6 +399,10 @@ export default function Settings({
                 <span>Preferensi Mata Uang (<strong>{currencySymbol}</strong>)</span>
               </li>
               <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                <span>Nama Toko Default (<strong>{defaultStoreName}</strong>)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-900"></span>
                 <span>Label Kustom & Kustomisasi Teks</span>
               </li>
@@ -467,8 +488,138 @@ export default function Settings({
           </div>
         </div>
 
-        {/* CARD 2: PREFERENSI MATA UANG & RESET SEMUA DATA */}
+        {/* CARD 2: PENGATURAN TOKO & MATA UANG & RESET */}
         <div className="space-y-6">
+
+          {/* NAMA TOKO DEFAULT */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4" id="section-default-store-name">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
+                  <Store className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Nama Toko Default
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-sans">
+                      Terus Dipakai
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Nama toko utama yang akan selalu digunakan secara otomatis pada kolom Nama Toko struk baru.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="input-default-store-name">
+                  Nama Toko yang Terus Dipakai:
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Store className="w-4 h-4 text-slate-400" />
+                    </span>
+                    <input
+                      type="text"
+                      id="input-default-store-name"
+                      value={storeNameInput}
+                      onChange={(e) => setStoreNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const trimmed = storeNameInput.trim();
+                          if (trimmed) {
+                            onSetDefaultStoreName(trimmed, applyToCurrentReceipt);
+                            showToast(`Nama Toko Default disimpan: "${trimmed}"`);
+                          }
+                        }
+                      }}
+                      placeholder="Contoh: KOPI SENJA CIPUTAT"
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = storeNameInput.trim();
+                      if (!trimmed) {
+                        showToast('Nama toko default tidak boleh kosong.');
+                        return;
+                      }
+                      onSetDefaultStoreName(trimmed, applyToCurrentReceipt);
+                      showToast(`Nama Toko Default berhasil disimpan: "${trimmed}"`);
+                    }}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 shrink-0"
+                    id="btn-save-default-store-name"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox: Terapkan juga ke struk aktif */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={applyToCurrentReceipt}
+                  onChange={(e) => setApplyToCurrentReceipt(e.target.checked)}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                <span>Terapkan juga langsung ke struk yang sedang dibuat saat ini</span>
+              </label>
+
+              {/* Status Note */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-slate-900">
+                    Nama Toko Aktif: <span className="font-mono text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded">{defaultStoreName}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Setiap kali Anda menekan tombol <strong>Transaksi Baru</strong> atau memulai struk baru, nama toko ini akan langsung digunakan secara konsisten.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Suggestion Presets */}
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Preset Cepat Nama Toko Populer:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'KOPI SENJA CIPUTAT',
+                    'MINIMARKET SEJAHTERA',
+                    'TOKO BERKAH JAYA',
+                    'WARUNG KELONTONG ABADI',
+                    'CAFE & RESTO NUSANTARA',
+                    'APOTEK FARMA SEHAT'
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setStoreNameInput(sug);
+                        onSetDefaultStoreName(sug, applyToCurrentReceipt);
+                        showToast(`Nama Toko Default diatur ke: "${sug}"`);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
+                        defaultStoreName === sug
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {sug}
+                      {defaultStoreName === sug && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
           
           {/* PREFERENSI MATA UANG */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">

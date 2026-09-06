@@ -37,9 +37,10 @@ const DEFAULT_ITEMS: Item[] = [
   { id: '2', name: 'Roti Bakar Cokelat', quantity: 1, price: 15000 },
 ];
 
-function getFreshDefaultReceipt(): Receipt {
+function getFreshDefaultReceipt(customStoreName?: string): Receipt {
   const initialTxId = generateTransactionId();
   const initialDate = getInitialLocalDateTime();
+  const defaultStore = customStoreName || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_name') : null) || 'KOPI SENJA CIPUTAT';
   const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
     DEFAULT_ITEMS,
     11, // Standard PPN 11%
@@ -49,7 +50,7 @@ function getFreshDefaultReceipt(): Receipt {
 
   return {
     id: Date.now().toString(),
-    storeName: 'KOPI SENJA CIPUTAT',
+    storeName: defaultStore,
     storeAddress: 'Jl. Raya Ciputat Raya No. 42, Jakarta',
     storePhone: '021-7401234',
     storeWebsite: 'www.kopisenjaabadi.com',
@@ -89,6 +90,11 @@ export default function App() {
   // Currency setting
   const [currencySymbol, setCurrencySymbol] = useState<string>(() => {
     return localStorage.getItem('strukku_currency') || 'Rp';
+  });
+
+  // Default Store Name setting (persisted in localStorage)
+  const [defaultStoreName, setDefaultStoreName] = useState<string>(() => {
+    return localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
   });
 
   // Main history log of saved transactions
@@ -140,10 +146,31 @@ export default function App() {
     return [];
   });
 
-  // Active receipt state in the editor
+  // Active receipt state in the editor with autosave draft recovery
   const [receipt, setReceipt] = useState<Receipt>(() => {
-    return getFreshDefaultReceipt();
+    const savedDefaultStore = localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
+    try {
+      const activeDraftRaw = localStorage.getItem('strukku_active_draft');
+      if (activeDraftRaw) {
+        const parsedDraft = JSON.parse(activeDraftRaw);
+        if (parsedDraft && parsedDraft.transactionId && Array.isArray(parsedDraft.items)) {
+          return parsedDraft;
+        }
+      }
+    } catch (e) {
+      console.error('Error restoring active draft on init:', e);
+    }
+    return getFreshDefaultReceipt(savedDefaultStore);
   });
+
+  // Track last autosave timestamp
+  const [lastAutosavedAt, setLastAutosavedAt] = useState<Date | null>(null);
+
+  // Keep a stable ref to receipt for intervals and window beforeunload listeners
+  const receiptRef = React.useRef(receipt);
+  useEffect(() => {
+    receiptRef.current = receipt;
+  }, [receipt]);
 
   // Success notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -158,6 +185,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_currency', currencySymbol);
   }, [currencySymbol]);
+
+  // Keep default store name preference in localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_default_store_name', defaultStoreName);
+  }, [defaultStoreName]);
 
   // Sync history state with localStorage
   useEffect(() => {
@@ -174,6 +206,98 @@ export default function App() {
     localStorage.setItem('strukku_archived_history', JSON.stringify(archivedHistory));
   }, [archivedHistory]);
 
+  // Autosave current receipt state to localStorage every 1 second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const current = receiptRef.current;
+      if (current) {
+        try {
+          localStorage.setItem('strukku_active_draft', JSON.stringify(current));
+          setLastAutosavedAt(new Date());
+        } catch (err) {
+          console.error('Autosave interval error:', err);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Save current receipt as draft in history ledger when browser is closed or refreshed
+  useEffect(() => {
+    const saveActiveDraftToLedger = () => {
+      const current = receiptRef.current;
+      if (!current) return;
+      // Skip saving empty receipts with 0 items
+      if (!current.items || current.items.length === 0) return;
+
+      try {
+        const draftToPersist: Receipt = {
+          ...current,
+          isDraft: true,
+          draftSavedAt: new Date().toISOString(),
+        };
+
+        const rawHistory = localStorage.getItem('strukku_history');
+        let currentHistory: Receipt[] = [];
+        if (rawHistory) {
+          try {
+            const parsed = JSON.parse(rawHistory);
+            if (Array.isArray(parsed)) currentHistory = parsed;
+          } catch {
+            currentHistory = [];
+          }
+        }
+
+        const existingIdx = currentHistory.findIndex(
+          (item) => item.id === draftToPersist.id || item.transactionId === draftToPersist.transactionId
+        );
+
+        let updatedHistory: Receipt[];
+        if (existingIdx >= 0) {
+          updatedHistory = currentHistory.map((item, idx) => (idx === existingIdx ? draftToPersist : item));
+        } else {
+          updatedHistory = [draftToPersist, ...currentHistory];
+        }
+
+        localStorage.setItem('strukku_history', JSON.stringify(updatedHistory));
+        localStorage.setItem('strukku_active_draft', JSON.stringify(draftToPersist));
+      } catch (err) {
+        console.error('Error auto-saving draft on browser close:', err);
+      }
+    };
+
+    window.addEventListener('beforeunload', saveActiveDraftToLedger);
+    window.addEventListener('pagehide', saveActiveDraftToLedger);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveActiveDraftToLedger();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('beforeunload', saveActiveDraftToLedger);
+      window.removeEventListener('pagehide', saveActiveDraftToLedger);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Update default store name setting and optionally update active receipt
+  const handleSetDefaultStoreName = (newStoreName: string, applyToCurrent: boolean = true) => {
+    const trimmed = newStoreName.trim();
+    if (!trimmed) return;
+    setDefaultStoreName(trimmed);
+    localStorage.setItem('strukku_default_store_name', trimmed);
+    if (applyToCurrent) {
+      setReceipt((prev) => ({
+        ...prev,
+        storeName: trimmed,
+      }));
+    }
+  };
+
   // Show a brief visual toast notification
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -182,30 +306,38 @@ export default function App() {
     }, 3000);
   };
 
-  // Save the currently generated receipt to local history
+  // Save the currently generated receipt to local history (finalizing if currently draft)
   const handleSaveReceipt = () => {
     if (receipt.items.length === 0) return;
 
-    // Check if receipt transactionId is already in history to prevent duplicates, or generate a fresh UUID ID
-    const isDuplicate = history.some(item => item.transactionId === receipt.transactionId);
-    let finalReceiptToSave = { ...receipt };
-    
-    if (isDuplicate) {
-      // Regenerate ID to treat as separate transaction
-      finalReceiptToSave.transactionId = generateTransactionId();
-    }
-    
-    // Assign a unique timestamp ID
-    finalReceiptToSave.id = Date.now().toString();
+    let finalReceiptToSave: Receipt = {
+      ...receipt,
+      isDraft: false,
+      draftSavedAt: undefined,
+    };
 
-    setHistory((prev) => [finalReceiptToSave, ...prev]);
-    showToast(`Struk #${finalReceiptToSave.transactionId.split('/')[0]} berhasil disimpan ke Riwayat!`);
+    setHistory((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => item.id === finalReceiptToSave.id || item.transactionId === finalReceiptToSave.transactionId
+      );
+
+      if (existingIdx >= 0) {
+        return prev.map((item, idx) => (idx === existingIdx ? finalReceiptToSave : item));
+      } else {
+        return [finalReceiptToSave, ...prev];
+      }
+    });
+
+    // Clear active draft in localStorage once finalized
+    localStorage.removeItem('strukku_active_draft');
+    showToast(`✅ Struk #${finalReceiptToSave.transactionId.split('/')[0]} berhasil difinalisasi dan disimpan ke Riwayat!`);
   };
 
-  // Start a fresh, new transaction with an automatically generated unique ID
+  // Start a fresh, new transaction with an automatically generated unique ID and default store name
   const handleNewReceipt = () => {
     const nextTxId = generateTransactionId();
     const formattedNow = getInitialLocalDateTime();
+    const effectiveStore = defaultStoreName || 'KOPI SENJA CIPUTAT';
     
     setReceipt((prev) => {
       const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
@@ -218,6 +350,7 @@ export default function App() {
       return {
         ...prev,
         id: Date.now().toString(),
+        storeName: effectiveStore,
         transactionId: nextTxId,
         dateTime: formattedNow,
         items: [],
@@ -228,21 +361,29 @@ export default function App() {
         total,
         cashReceived: 0,
         changeAmount: 0,
+        isDraft: false,
+        draftSavedAt: undefined,
       };
     });
     
+    // Clear active draft in localStorage
+    localStorage.removeItem('strukku_active_draft');
     showToast(`Transaksi Baru Dimulai! ID: ${nextTxId.split('/')[0]}`);
   };
 
-  // Load a historic receipt back into the POS generator for editing/re-printing
+  // Load a historic receipt or draft back into the POS generator for editing/re-printing
   const handleLoadReceipt = (loadedReceipt: Receipt) => {
     setReceipt({
       ...loadedReceipt,
-      // Give it a fresh unique timestamp ID but preserve the rest
-      id: Date.now().toString(),
+      id: loadedReceipt.id || Date.now().toString(),
     });
+    localStorage.setItem('strukku_active_draft', JSON.stringify(loadedReceipt));
     setActiveView('generator');
-    showToast(`Struk #${loadedReceipt.transactionId.split('/')[0]} berhasil dimuat ulang ke Generator!`);
+    if (loadedReceipt.isDraft) {
+      showToast(`📝 Draf struk #${loadedReceipt.transactionId.split('/')[0]} dibuka di Generator! Lanjutkan transaksi.`);
+    } else {
+      showToast(`Struk #${loadedReceipt.transactionId.split('/')[0]} berhasil dimuat ulang ke Generator!`);
+    }
     
     // Smooth scroll back to form
     setTimeout(() => {
@@ -300,6 +441,22 @@ export default function App() {
     setHistory((prev) => prev.filter((item) => item.id !== id));
     setTrashHistory((prev) => [markedItem, ...prev.filter((item) => item.id !== id)]);
     showToast(`🗑️ Struk #${itemToDelete.transactionId.split('/')[0]} dipindahkan ke Sampah.`);
+  };
+
+  // Clear all drafts from history (moves to Trash)
+  const handleClearDrafts = () => {
+    const drafts = history.filter((item) => item.isDraft);
+    if (drafts.length === 0) return;
+    const now = new Date().toISOString();
+    const markedDrafts: Receipt[] = drafts.map((item) => ({
+      ...item,
+      deletedAt: item.deletedAt || now,
+    }));
+
+    setTrashHistory((prev) => [...markedDrafts, ...prev]);
+    setHistory((prev) => prev.filter((item) => !item.isDraft));
+    localStorage.removeItem('strukku_active_draft');
+    showToast(`🗑️ ${drafts.length} draf struk dipindahkan ke Sampah.`);
   };
 
   // Clear entire history (moves all active receipts to Trash)
@@ -470,16 +627,18 @@ export default function App() {
     setArchivedHistory([]);
     setTrashHistory([]);
     setCurrencySymbol('Rp');
-    setReceipt(getFreshDefaultReceipt());
+    setDefaultStoreName('KOPI SENJA CIPUTAT');
+    setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT'));
     showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
   };
 
-  // Full backup restore (including pinned receipts, custom presets, currency, active draft)
+  // Full backup restore (including pinned receipts, custom presets, currency, default store name, active draft)
   const handleRestoreBackup = (backupData: {
     history?: Receipt[];
     archivedHistory?: Receipt[];
     customPresets?: any[];
     currencySymbol?: string;
+    defaultStoreName?: string;
     activeReceipt?: Receipt;
   }) => {
     if (Array.isArray(backupData.history)) {
@@ -496,6 +655,10 @@ export default function App() {
     if (backupData.currencySymbol) {
       setCurrencySymbol(backupData.currencySymbol);
       localStorage.setItem('strukku_currency', backupData.currencySymbol);
+    }
+    if (backupData.defaultStoreName) {
+      setDefaultStoreName(backupData.defaultStoreName);
+      localStorage.setItem('strukku_default_store_name', backupData.defaultStoreName);
     }
     if (backupData.activeReceipt && typeof backupData.activeReceipt === 'object') {
       setReceipt(backupData.activeReceipt);
@@ -545,7 +708,26 @@ export default function App() {
               <span>Generator POS</span>
             </button>
             <button
-              onClick={() => setActiveView('history')}
+              onClick={() => {
+                // Ensure in-progress receipt with items is saved as draft so it appears in history immediately
+                if (receipt.items && receipt.items.length > 0) {
+                  const draftToPersist: Receipt = {
+                    ...receipt,
+                    isDraft: true,
+                    draftSavedAt: new Date().toISOString(),
+                  };
+                  setHistory((prev) => {
+                    const existingIdx = prev.findIndex(
+                      (item) => item.id === draftToPersist.id || item.transactionId === draftToPersist.transactionId
+                    );
+                    if (existingIdx >= 0) {
+                      return prev.map((item, idx) => (idx === existingIdx ? draftToPersist : item));
+                    }
+                    return [draftToPersist, ...prev];
+                  });
+                }
+                setActiveView('history');
+              }}
               className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative ${
                 activeView === 'history'
                   ? 'bg-slate-900 text-white shadow-xs'
@@ -589,10 +771,20 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Currency Shortcut preference */}
-          <div className="hidden sm:flex items-center gap-1.5 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50/50 text-slate-700">
-            <span>Mata Uang:</span>
-            <span className="text-slate-900 font-mono">{currencySymbol}</span>
+          {/* Header Utilities */}
+          <div className="hidden sm:flex items-center gap-2">
+            <div 
+              className="flex items-center gap-1.5 border border-emerald-200/80 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 shadow-2xs"
+              title="Autosave aktif setiap 1 detik. Draf tersimpan otomatis ke Riwayat Ledger saat browser ditutup."
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+              <span className="text-[11px] font-medium hidden md:inline">Autosave 1s</span>
+            </div>
+
+            <div className="flex items-center gap-1.5 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50/50 text-slate-700">
+              <span>Mata Uang:</span>
+              <span className="text-slate-900 font-mono">{currencySymbol}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -613,6 +805,9 @@ export default function App() {
                 onNewReceipt={handleNewReceipt}
                 currencySymbol={currencySymbol}
                 setCurrencySymbol={setCurrencySymbol}
+                defaultStoreName={defaultStoreName}
+                onSetDefaultStoreName={handleSetDefaultStoreName}
+                lastAutosavedAt={lastAutosavedAt}
               />
             </div>
 
@@ -640,6 +835,8 @@ export default function App() {
               onTogglePinReceipt={handleTogglePinReceipt}
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
+              onClearDrafts={handleClearDrafts}
+              onNavigateToGenerator={() => setActiveView('generator')}
               onArchiveReceipt={handleArchiveReceipt}
               onArchiveAllHistory={handleArchiveAllHistory}
               onUnarchiveReceipt={handleUnarchiveReceipt}
@@ -674,6 +871,8 @@ export default function App() {
               receipt={receipt}
               currencySymbol={currencySymbol}
               onSetCurrencySymbol={setCurrencySymbol}
+              defaultStoreName={defaultStoreName}
+              onSetDefaultStoreName={handleSetDefaultStoreName}
               onResetAllData={handleResetAllData}
               onRestoreBackup={handleRestoreBackup}
               showToast={showToast}

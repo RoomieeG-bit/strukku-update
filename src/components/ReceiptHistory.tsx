@@ -38,7 +38,8 @@ import {
   Info,
   LayoutGrid,
   List,
-  Pencil
+  Pencil,
+  FileEdit
 } from 'lucide-react';
 import EditReceiptModal from './EditReceiptModal';
 
@@ -51,6 +52,8 @@ interface ReceiptHistoryProps {
   onTogglePinReceipt?: (id: string) => void;
   onDeleteReceipt: (id: string) => void;
   onClearHistory: () => void;
+  onClearDrafts?: () => void;
+  onNavigateToGenerator?: () => void;
   onArchiveReceipt?: (id: string) => void;
   onArchiveAllHistory?: () => void;
   onUnarchiveReceipt?: (id: string) => void;
@@ -74,6 +77,8 @@ export default function ReceiptHistory({
   onTogglePinReceipt,
   onDeleteReceipt,
   onClearHistory,
+  onClearDrafts,
+  onNavigateToGenerator,
   onArchiveReceipt,
   onArchiveAllHistory,
   onUnarchiveReceipt,
@@ -88,7 +93,7 @@ export default function ReceiptHistory({
   currencySymbol,
 }: ReceiptHistoryProps) {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'trash'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'drafts' | 'archived' | 'trash'>('active');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     try {
       const saved = localStorage.getItem('strukku_history_view_mode');
@@ -107,6 +112,7 @@ export default function ReceiptHistory({
     }
   };
   const [searchTerm, setSearchTerm] = useState('');
+  const [draftSearchTerm, setDraftSearchTerm] = useState('');
   const [archivedSearchTerm, setArchivedSearchTerm] = useState('');
   const [trashSearchTerm, setTrashSearchTerm] = useState('');
   const [methodFilter, setMethodFilter] = useState<string>('ALL');
@@ -141,10 +147,14 @@ export default function ReceiptHistory({
     setArchivedSearchTerm('');
   };
 
-  const pinnedCount = history.filter((item) => item.isPinned || item.isFavorite).length;
+  const finalizedHistory = history.filter((item) => !item.isDraft);
+  const draftHistory = history.filter((item) => item.isDraft);
+  const draftCount = draftHistory.length;
+  const finalizedCount = finalizedHistory.length;
+  const pinnedCount = finalizedHistory.filter((item) => item.isPinned || item.isFavorite).length;
 
-  // Filter active history list
-  const filteredHistory = history.filter((item) => {
+  // Filter active history list (finalized transactions)
+  const filteredHistory = finalizedHistory.filter((item) => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch = !term ||
       item.transactionId.toLowerCase().includes(term) ||
@@ -167,7 +177,7 @@ export default function ReceiptHistory({
     return matchesSearch && matchesMethod && matchesDate;
   });
 
-  // Sort active history: pinned items always float to the top
+  // Sort active history: pinned items float to the top
   const sortedHistory = [...filteredHistory].sort((a, b) => {
     const isAPinned = Boolean(a.isPinned || a.isFavorite);
     const isBPinned = Boolean(b.isPinned || b.isFavorite);
@@ -175,6 +185,36 @@ export default function ReceiptHistory({
     if (!isAPinned && isBPinned) return 1;
     return 0; // maintain original chronological order
   });
+
+  // Filter draft history
+  const filteredDraftHistory = draftHistory.filter((item) => {
+    const term = draftSearchTerm.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      item.transactionId.toLowerCase().includes(term) ||
+      (item.customerName && item.customerName.toLowerCase().includes(term)) ||
+      item.storeName.toLowerCase().includes(term) ||
+      item.cashierName.toLowerCase().includes(term) ||
+      item.items.some((i) => 
+        i.name.toLowerCase().includes(term) || 
+        (i.id && i.id.toLowerCase().includes(term))
+      )
+    );
+  });
+
+  // Sort drafts: newest draft first
+  const sortedDraftHistory = [...filteredDraftHistory].sort((a, b) => {
+    const timeA = new Date(a.draftSavedAt || a.dateTime || 0).getTime();
+    const timeB = new Date(b.draftSavedAt || b.dateTime || 0).getTime();
+    return timeB - timeA;
+  });
+
+  // Calculate stats on drafts list
+  const totalDraftRevenue = filteredDraftHistory.reduce((sum, item) => sum + item.total, 0);
+  const totalDraftItemsCount = filteredDraftHistory.reduce(
+    (sum, item) => sum + item.items.reduce((acc, i) => acc + i.quantity, 0),
+    0
+  );
 
   // Filter trash list
   const filteredTrashHistory = (trashHistory || []).filter((item) => {
@@ -321,12 +361,16 @@ export default function ReceiptHistory({
                 ? 'bg-rose-600 text-white'
                 : activeTab === 'archived'
                 ? 'bg-amber-600 text-white'
+                : activeTab === 'drafts'
+                ? 'bg-amber-500 text-white'
                 : 'bg-slate-900 text-white'
             }`}>
               {activeTab === 'trash' ? (
                 <Trash2 className="w-5 h-5" />
               ) : activeTab === 'archived' ? (
                 <Archive className="w-5 h-5" />
+              ) : activeTab === 'drafts' ? (
+                <FileEdit className="w-5 h-5" />
               ) : (
                 <History className="w-5 h-5" />
               )}
@@ -337,6 +381,8 @@ export default function ReceiptHistory({
                   ? 'Kotak Sampah Struk' 
                   : activeTab === 'archived'
                   ? 'Struk Yang Di Arsipkan'
+                  : activeTab === 'drafts'
+                  ? 'Draf Struk Penjualan'
                   : 'Riwayat Transaksi'}
               </h3>
               <span className="text-xs text-slate-500 font-medium">
@@ -344,7 +390,9 @@ export default function ReceiptHistory({
                   ? 'Struk yang dihapus tersimpan di sini & bisa dipulihkan kembali' 
                   : activeTab === 'archived'
                   ? 'Kumpulan struk yang diarsipkan agar buku kas tetap rapi dan ringkas'
-                  : 'Laporan penjualan & riwayat transaksi aktif'}
+                  : activeTab === 'drafts'
+                  ? 'Struk yang belum difinalisasi atau tersimpan otomatis saat browser ditutup'
+                  : 'Laporan penjualan & riwayat transaksi final'}
               </span>
             </div>
           </div>
@@ -367,11 +415,35 @@ export default function ReceiptHistory({
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                 activeTab === 'active' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
               }`}>
-                {history.length}
+                {finalizedCount}
               </span>
             </button>
 
-            {/* Tab 2: Struk Yang Di Arsipkan */}
+            {/* Tab 2: Draf */}
+            <button
+              type="button"
+              onClick={() => setActiveTab('drafts')}
+              className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
+                activeTab === 'drafts'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-amber-900 border-slate-200 hover:border-amber-300 hover:bg-amber-50/50'
+              }`}
+              id="tab-history-drafts"
+            >
+              <FileEdit className="w-3.5 h-3.5" />
+              <span>Draf</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === 'drafts'
+                  ? 'bg-white text-amber-900 font-extrabold'
+                  : draftCount > 0
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {draftCount}
+              </span>
+            </button>
+
+            {/* Tab 3: Struk Yang Di Arsipkan */}
             <button
               type="button"
               onClick={() => setActiveTab('archived')}
@@ -398,7 +470,7 @@ export default function ReceiptHistory({
             {/* Visual Divider / Spacer to keep Trash clearly distinct */}
             <div className="h-5 w-px bg-slate-200 mx-1" aria-hidden="true" />
 
-            {/* Tab 3: Sampah */}
+            {/* Tab 4: Sampah */}
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
@@ -431,7 +503,7 @@ export default function ReceiptHistory({
             <button
               type="button"
               onClick={handleExportCSV}
-              disabled={history.length === 0}
+              disabled={finalizedHistory.length === 0}
               className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 disabled:opacity-50 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
               title="Ekspor daftar transaksi ke format CSV untuk Microsoft Excel & Spreadsheet"
               id="btn-export-csv"
@@ -443,7 +515,7 @@ export default function ReceiptHistory({
             <button
               type="button"
               onClick={handleExportJSON}
-              disabled={history.length === 0}
+              disabled={finalizedHistory.length === 0}
               className="px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 disabled:opacity-50 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
               title="Download Backup Riwayat (.json)"
               id="btn-export-json"
@@ -461,7 +533,7 @@ export default function ReceiptHistory({
               />
             </label>
 
-            {history.length > 0 && (
+            {finalizedHistory.length > 0 && (
               <>
                 <button
                   type="button"
@@ -469,7 +541,7 @@ export default function ReceiptHistory({
                     setConfirmModal({
                       isOpen: true,
                       title: 'Arsipkan Semua Struk Aktif?',
-                      message: `Semua (${history.length}) riwayat transaksi aktif saat ini akan dipindahkan ke tab 'Struk Yang Di Arsipkan'. Anda dapat mengeluarkannya kembali dari arsip kapan saja.`,
+                      message: `Semua (${finalizedHistory.length}) riwayat transaksi aktif saat ini akan dipindahkan ke tab 'Struk Yang Di Arsipkan'. Anda dapat mengeluarkannya kembali dari arsip kapan saja.`,
                       confirmLabel: 'Arsipkan Semua',
                       variant: 'amber',
                       onConfirm: () => onArchiveAllHistory?.(),
@@ -488,7 +560,7 @@ export default function ReceiptHistory({
                     setConfirmModal({
                       isOpen: true,
                       title: 'Pindahkan Semua ke Sampah?',
-                      message: `Seluruh (${history.length}) riwayat transaksi aktif akan dipindahkan ke tab Sampah. Anda dapat memulihkannya kembali kapan saja.`,
+                      message: `Seluruh (${finalizedHistory.length}) riwayat transaksi aktif akan dipindahkan ke tab Sampah. Anda dapat memulihkannya kembali kapan saja.`,
                       confirmLabel: 'Pindahkan ke Sampah',
                       variant: 'rose',
                       onConfirm: () => onClearHistory(),
@@ -500,6 +572,49 @@ export default function ReceiptHistory({
                   <Trash2 className="w-3.5 h-3.5" /> Pindahkan Semua ke Sampah
                 </button>
               </>
+            )}
+          </div>
+        ) : activeTab === 'drafts' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {draftHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmModal({
+                    isOpen: true,
+                    title: 'Pindahkan Semua Draf ke Sampah?',
+                    message: `Semua (${draftHistory.length}) draf struk yang belum difinalisasi akan dipindahkan ke tab Sampah. Anda dapat memulihkannya kembali kapan saja.`,
+                    confirmLabel: 'Pindahkan ke Sampah',
+                    variant: 'rose',
+                    onConfirm: () => {
+                      if (onClearDrafts) {
+                        onClearDrafts();
+                      } else {
+                        draftHistory.forEach((d) => onDeleteReceipt(d.id));
+                      }
+                    },
+                  });
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer active:scale-95 shadow-2xs"
+                title="Pindahkan seluruh draf ke Sampah"
+                id="btn-clear-all-drafts"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Semua Draf</span>
+              </button>
+            )}
+
+            {onNavigateToGenerator && (
+              <button
+                type="button"
+                onClick={onNavigateToGenerator}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                title="Buka Generator POS untuk membuat struk baru atau melanjutkan"
+                id="btn-nav-generator-from-draft"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>Ke Generator POS</span>
+              </button>
             )}
           </div>
         ) : activeTab === 'archived' ? (
@@ -687,6 +802,18 @@ export default function ReceiptHistory({
               {/* Results Count, Quick Pinned Filter, Reset Filter Indicator & View Mode Toggle */}
               <div className="flex items-center justify-between gap-3 text-xs flex-wrap w-full">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {draftCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('drafts')}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer border bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-2xs"
+                      title="Buka tab Draf untuk mengelola transaksi yang belum difinalisasi"
+                    >
+                      <FileEdit className="w-3 h-3 text-amber-700" />
+                      <span>{draftCount} Draf Tersimpan →</span>
+                    </button>
+                  )}
+
                   {pinnedCount > 0 && (
                     <button
                       type="button"
@@ -704,7 +831,7 @@ export default function ReceiptHistory({
                   )}
 
                   <span className="text-slate-500 font-medium">
-                    <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {history.length} transaksi
+                    <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {finalizedCount} transaksi
                   </span>
                   {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
                     <button
@@ -795,6 +922,11 @@ export default function ReceiptHistory({
                       {/* Store details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
+                          {item.isDraft && (
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                              <Pencil className="w-3 h-3 text-amber-700" /> Draf Otomatis
+                            </span>
+                          )}
                           {isPinned && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 flex items-center gap-1 shadow-2xs">
                               <Pin className="w-3 h-3 fill-slate-950" /> Tersemat di Atas
@@ -954,10 +1086,15 @@ export default function ReceiptHistory({
                           <button
                             type="button"
                             onClick={() => onLoadReceipt(item)}
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                            title="Muat kembali ke generator POS"
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                              item.isDraft
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs font-bold'
+                                : 'bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white'
+                            }`}
+                            title={item.isDraft ? "Lanjutkan pengisian draf struk ini ke Generator" : "Muat kembali ke generator POS"}
                           >
-                            <ArrowUpRight className="w-3.5 h-3.5" /> Muat
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <span>{item.isDraft ? 'Lanjutkan Draf' : 'Muat'}</span>
                           </button>
                           <button
                             type="button"
@@ -994,6 +1131,11 @@ export default function ReceiptHistory({
                         {/* Badges & Store Name */}
                         <div className="mb-2">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            {item.isDraft && (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                                <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
+                              </span>
+                            )}
                             {isPinned && (
                               <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 flex items-center gap-1 shadow-2xs">
                                 <Pin className="w-2.5 h-2.5 fill-slate-950" /> Pin
@@ -1136,11 +1278,15 @@ export default function ReceiptHistory({
                           <button
                             type="button"
                             onClick={() => onLoadReceipt(item)}
-                            className="py-1.5 px-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs"
-                            title="Muat ke Generator POS"
+                            className={`py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs ${
+                              item.isDraft
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
+                                : 'bg-slate-900 hover:bg-slate-800 text-white'
+                            }`}
+                            title={item.isDraft ? "Lanjutkan draf struk ini ke Generator" : "Muat ke Generator POS"}
                           >
                             <ArrowUpRight className="w-3.5 h-3.5" />
-                            <span className="text-[11px]">Muat</span>
+                            <span className="text-[11px]">{item.isDraft ? 'Draf' : 'Muat'}</span>
                           </button>
 
                           <button
@@ -1194,6 +1340,411 @@ export default function ReceiptHistory({
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Ekspor ke CSV ({filteredHistory.length})</span>
               </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* TAB CONTENT: DRAF STRUK PENJUALAN */}
+      {activeTab === 'drafts' && (
+        <>
+          {/* Drafts Information Banner & Search Input */}
+          <div className="p-4 border-b border-slate-100 bg-white space-y-3 shrink-0">
+            <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5 shadow-xs">
+                  <FileEdit className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950 flex items-center gap-2">
+                    <span>Draf Struk Penjualan</span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-900">
+                      Autosave Aktif
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-amber-900/85 mt-0.5 leading-relaxed">
+                    Struk yang sedang Anda buat di Generator POS otomatis tersimpan di sini agar tidak hilang saat browser ditutup atau saat berpindah halaman. Klik <strong>Lanjutkan Draf</strong> untuk langsung meneruskan transaksi.
+                  </p>
+                </div>
+              </div>
+
+              {draftHistory.length > 0 && (
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <span className="text-[11px] font-bold text-amber-950 bg-white px-3 py-1.5 rounded-lg border border-amber-300 shadow-2xs">
+                    {draftHistory.length} Draf Tersedia
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Search & View Mode row */}
+            {draftHistory.length > 0 && (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Search className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Cari draf berdasarkan ID Transaksi, Toko, Pelanggan, Kasir, atau Item..."
+                    value={draftSearchTerm}
+                    onChange={(e) => setDraftSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 focus:bg-white rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition shadow-2xs"
+                    id="draft-search-input"
+                    autoComplete="off"
+                  />
+                  {draftSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setDraftSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                      title="Hapus kata pencarian"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleViewMode('list')}
+                      className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                        viewMode === 'list'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Format List Vertikal"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleViewMode('grid')}
+                      className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                        viewMode === 'grid'
+                          ? 'bg-white text-slate-900 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Format Grid Kartu Ringkas"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {draftSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setDraftSearchTerm('')}
+                      className="px-2.5 py-2 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer font-medium"
+                      title="Reset pencarian"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Drafts List Content */}
+          <div className="flex-1 overflow-y-auto">
+            {draftHistory.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center h-full">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mb-3 shadow-2xs">
+                  <FileEdit className="w-7 h-7" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-800 mb-1">Tidak Ada Draf Struk</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4 leading-relaxed">
+                  Semua transaksi telah disimpan atau belum ada draf yang dibuat. Saat Anda mengisi struk di Generator POS dan meninggalkan halaman atau menutup browser, draf otomatis tercatat di sini.
+                </p>
+                {onNavigateToGenerator && (
+                  <button
+                    type="button"
+                    onClick={onNavigateToGenerator}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
+                  >
+                    Buka Generator POS
+                  </button>
+                )}
+              </div>
+            ) : filteredDraftHistory.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center h-full">
+                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                  <Search className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-700 mb-1">Draf Tidak Ditemukan</h4>
+                <p className="text-xs text-slate-400 max-w-xs mb-3">
+                  Pencarian "{draftSearchTerm}" tidak cocok dengan {draftHistory.length} draf struk yang ada.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDraftSearchTerm('')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  Hapus Kata Kunci
+                </button>
+              </div>
+            ) : viewMode === 'list' ? (
+              <div className="divide-y divide-slate-100">
+                {sortedDraftHistory.map((item) => {
+                  const itemCount = item.items.reduce((acc, i) => acc + i.quantity, 0);
+                  const isCopied = copiedId === item.transactionId;
+                  const draftTime = item.draftSavedAt || item.dateTime;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 hover:bg-amber-50/40 transition flex flex-col md:flex-row md:items-center justify-between gap-4 group bg-amber-50/15"
+                    >
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <Pencil className="w-3 h-3 text-amber-700" /> Draf
+                          </span>
+
+                          <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                            <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[200px] sm:max-w-xs">{item.storeName}</span>
+                          </span>
+
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                            {item.paymentMethod}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                            className="flex items-center gap-1 font-mono text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded transition cursor-pointer text-[11px]"
+                            title="Klik untuk salin ID Transaksi"
+                          >
+                            <span>#{item.transactionId}</span>
+                            {isCopied ? (
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3 h-3 text-slate-400" />
+                            )}
+                          </button>
+
+                          <span className="flex items-center gap-1 text-[11px] text-amber-800">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            <span>Tersimpan: {formatDateTime(draftTime)}</span>
+                          </span>
+
+                          {item.customerName && (
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3 text-slate-400" />
+                              <span className="truncate max-w-[120px]">{item.customerName}</span>
+                            </span>
+                          )}
+
+                          <span className="flex items-center gap-1">
+                            <ShoppingBag className="w-3 h-3 text-slate-400" />
+                            <span>{item.items.length} item ({itemCount} pcs)</span>
+                          </span>
+                        </div>
+
+                        {/* Items preview snippet */}
+                        <div className="text-[11px] text-slate-500 line-clamp-1 italic">
+                          Item: {item.items.map(i => `${i.name} (${i.quantity}x)`).join(', ')}
+                        </div>
+                      </div>
+
+                      {/* Right side: total price & actions */}
+                      <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-slate-100">
+                        <div className="text-left md:text-right">
+                          <span className="text-[10px] text-amber-800 block font-bold uppercase tracking-wider">Perkiraan Total</span>
+                          <span className="font-bold text-slate-900 font-mono text-base">
+                            {formatCurrency(item.total, currencySymbol)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onLoadReceipt(item)}
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                            title="Buka struk ini di Generator POS untuk melanjutkan transaksi"
+                            id={`btn-load-draft-${item.id}`}
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <span>Lanjutkan Draf</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingReceipt(item)}
+                            className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 rounded-lg transition cursor-pointer"
+                            title="Edit Data Draf"
+                            id={`btn-edit-draft-${item.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteReceipt(item.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg transition cursor-pointer"
+                            title="Hapus draf ini (pindahkan ke Sampah)"
+                            id={`btn-delete-draft-${item.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Grid View for Drafts */
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {sortedDraftHistory.map((item) => {
+                  const itemCount = item.items.reduce((acc, i) => acc + i.quantity, 0);
+                  const isCopied = copiedId === item.transactionId;
+                  const draftTime = item.draftSavedAt || item.dateTime;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-amber-50/20 border border-amber-200/80 hover:border-amber-300 rounded-xl p-3.5 transition flex flex-col justify-between shadow-2xs hover:shadow-xs group"
+                    >
+                      <div>
+                        {/* Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                            {item.paymentMethod}
+                          </span>
+                        </div>
+
+                        {/* Store & ID */}
+                        <h4 className="font-bold text-slate-900 text-sm truncate flex items-center gap-1 mb-1">
+                          <Store className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{item.storeName}</span>
+                        </h4>
+
+                        <div className="flex items-center justify-between gap-1 mb-2">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                            className="font-mono text-[10px] text-slate-500 hover:text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 cursor-pointer truncate max-w-[170px]"
+                            title="Salin ID Transaksi"
+                          >
+                            <span>#{item.transactionId}</span>
+                            {isCopied ? <Check className="w-2.5 h-2.5 text-emerald-600" /> : <Copy className="w-2.5 h-2.5 text-slate-400" />}
+                          </button>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-1 text-[11px] text-slate-600 border-t border-amber-100/70 pt-2 mb-3">
+                          <div className="flex items-center justify-between text-amber-800">
+                            <span className="flex items-center gap-1 text-[10px]">
+                              <Clock className="w-3 h-3 text-amber-600" /> Tersimpan
+                            </span>
+                            <span className="font-medium text-[10px]">{formatDateTime(draftTime).split(' ')[0]}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                              <ShoppingBag className="w-3 h-3" /> Item
+                            </span>
+                            <span className="font-semibold text-slate-800">{item.items.length} jenis ({itemCount} pcs)</span>
+                          </div>
+
+                          <div className="text-[10px] text-slate-500 truncate italic">
+                            {item.items.map(i => i.name).join(', ')}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Total & Actions */}
+                      <div className="border-t border-amber-200/60 pt-2.5 mt-auto">
+                        <div className="flex items-baseline justify-between mb-2">
+                          <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Perkiraan</span>
+                          <span className="font-mono font-bold text-sm text-slate-900">
+                            {formatCurrency(item.total, currencySymbol)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onLoadReceipt(item)}
+                            className="col-span-2 py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                            title="Lanjutkan draf struk ini ke Generator"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Lanjutkan</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingReceipt(item)}
+                            className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                            title="Edit Data Draf"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteReceipt(item.id)}
+                            className="py-1.5 px-2 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+                            title="Hapus draf (ke Sampah)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Drafts Bottom Stats Bar */}
+          {filteredDraftHistory.length > 0 && (
+            <div className="bg-amber-50/60 border-t border-amber-200/80 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center flex-1 w-full">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Total Nilai Draf</span>
+                  <span className="text-sm font-mono font-bold text-amber-950">
+                    {formatCurrency(totalDraftRevenue, currencySymbol)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Jumlah Draf</span>
+                  <span className="text-sm font-bold text-amber-950">
+                    {filteredDraftHistory.length} Draf
+                  </span>
+                </div>
+                <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-amber-200 pt-2 sm:pt-0">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Total Item Draf</span>
+                  <span className="text-sm font-bold text-amber-950">
+                    {totalDraftItemsCount} pcs
+                  </span>
+                </div>
+              </div>
+
+              {sortedDraftHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onLoadReceipt(sortedDraftHistory[0])}
+                  className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+                  title="Lanjutkan pengerjaan draf struk paling baru"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span>Lanjutkan Draf Terbaru</span>
+                </button>
+              )}
             </div>
           )}
         </>

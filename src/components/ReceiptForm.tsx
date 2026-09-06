@@ -69,6 +69,9 @@ interface ReceiptFormProps {
   onNewReceipt: () => void;
   currencySymbol: string;
   setCurrencySymbol: (symbol: string) => void;
+  defaultStoreName?: string;
+  onSetDefaultStoreName?: (storeName: string) => void;
+  lastAutosavedAt?: Date | null;
 }
 
 // Preset Quick-Add Items for super easy POS simulation
@@ -186,6 +189,9 @@ export default function ReceiptForm({
   onNewReceipt,
   currencySymbol,
   setCurrencySymbol,
+  defaultStoreName,
+  onSetDefaultStoreName,
+  lastAutosavedAt,
 }: ReceiptFormProps) {
   // Local state for adding a single item
   const [newItemName, setNewItemName] = useState('');
@@ -885,7 +891,27 @@ export default function ReceiptForm({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="store-name-input">Nama Toko</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-700" htmlFor="store-name-input">
+                    Nama Toko
+                  </label>
+                  {defaultStoreName && (
+                    receipt.storeName === defaultStoreName ? (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5 text-emerald-600" /> Toko Default
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculate({ storeName: defaultStoreName })}
+                        className="text-[10px] font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title={`Pakai toko default: ${defaultStoreName}`}
+                      >
+                        Pakai Default
+                      </button>
+                    )
+                  )}
+                </div>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <Store className="w-4 h-4" />
@@ -899,6 +925,22 @@ export default function ReceiptForm({
                     placeholder="Nama Minimarket / Cafe"
                   />
                 </div>
+                {defaultStoreName && receipt.storeName !== defaultStoreName && onSetDefaultStoreName && (
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Default: <strong className="font-mono text-slate-700">{defaultStoreName}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = receipt.storeName.trim();
+                        if (trimmed) onSetDefaultStoreName(trimmed);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline"
+                      title="Simpan nama toko ini sebagai nama toko default baru"
+                    >
+                      Jadikan Default
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -3274,25 +3316,45 @@ export default function ReceiptForm({
       </div>
 
       {/* Footer Save Receipt Action */}
-      <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0 flex gap-2">
-        <button
-          type="button"
-          onClick={onNewReceipt}
-          className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition active:scale-98"
-          id="new-receipt-button"
-          title="Mulai transaksi baru dengan ID unik otomatis"
-        >
-          <PlusCircle className="w-4 h-4" /> Transaksi Baru
-        </button>
-        <button
-          type="button"
-          onClick={handleTriggerSave}
-          disabled={receipt.items.length === 0}
-          className="flex-1 py-3 bg-slate-900 hover:bg-slate-950 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition active:scale-98"
-          id="save-receipt-button"
-        >
-          <FileText className="w-4 h-4" /> Simpan Struk ke Riwayat
-        </button>
+      <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0 space-y-2.5">
+        {/* Autosave Status Row */}
+        <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
+          <div className="flex items-center gap-1.5 font-medium text-emerald-700">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Autosave aktif (tiap detik) • Draf tersimpan di riwayat saat browser ditutup</span>
+          </div>
+          {receipt.isDraft && (
+            <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Mode Draf Aktif
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onNewReceipt}
+            className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition active:scale-98"
+            id="new-receipt-button"
+            title="Mulai transaksi baru dengan ID unik otomatis dan nama toko default"
+          >
+            <PlusCircle className="w-4 h-4" /> Transaksi Baru
+          </button>
+          <button
+            type="button"
+            onClick={handleTriggerSave}
+            disabled={receipt.items.length === 0}
+            className={`flex-1 py-3 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition active:scale-98 ${
+              receipt.isDraft
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
+                : 'bg-slate-900 hover:bg-slate-950'
+            }`}
+            id="save-receipt-button"
+          >
+            <FileText className="w-4 h-4" />
+            <span>{receipt.isDraft ? 'Finalisasi & Simpan ke Riwayat' : 'Simpan Struk ke Riwayat'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Confirmation Dialog: Pembayaran Kurang */}

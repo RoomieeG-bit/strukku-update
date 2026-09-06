@@ -121,6 +121,8 @@ export interface Receipt {
   isArchived?: boolean; // Archived receipt saved for records
   archivedAt?: string; // ISO timestamp when receipt was archived
   deletedAt?: string; // ISO string when receipt was moved to trash
+  isDraft?: boolean; // Saved as draft in ledger
+  draftSavedAt?: string; // ISO string when receipt draft was autosaved
 }
 
 export interface StoreProfile {
