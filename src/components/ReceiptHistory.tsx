@@ -37,14 +37,17 @@ import {
   ArchiveRestore,
   Info,
   LayoutGrid,
-  List
+  List,
+  Pencil
 } from 'lucide-react';
+import EditReceiptModal from './EditReceiptModal';
 
 interface ReceiptHistoryProps {
   history: Receipt[];
   archivedHistory?: Receipt[];
   trashHistory?: Receipt[];
   onLoadReceipt: (receipt: Receipt) => void;
+  onUpdateReceipt?: (receipt: Receipt) => void;
   onTogglePinReceipt?: (id: string) => void;
   onDeleteReceipt: (id: string) => void;
   onClearHistory: () => void;
@@ -67,6 +70,7 @@ export default function ReceiptHistory({
   archivedHistory = [],
   trashHistory = [],
   onLoadReceipt,
+  onUpdateReceipt,
   onTogglePinReceipt,
   onDeleteReceipt,
   onClearHistory,
@@ -83,6 +87,7 @@ export default function ReceiptHistory({
   onImportHistory,
   currencySymbol,
 }: ReceiptHistoryProps) {
+  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'trash'>('active');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     try {
@@ -934,6 +939,18 @@ export default function ReceiptHistory({
                             <span className="hidden sm:inline">Arsipkan</span>
                           </button>
 
+                          {/* Edit Struk Button */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingReceipt(item)}
+                            className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                            title="Edit rincian struk ini langsung di ledger"
+                            id={`btn-edit-receipt-${item.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="hidden sm:inline">Edit</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => onLoadReceipt(item)}
@@ -1083,7 +1100,7 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-5 gap-1.5">
                           <button
                             type="button"
                             onClick={() => onTogglePinReceipt?.(item.id)}
@@ -1104,6 +1121,16 @@ export default function ReceiptHistory({
                             title="Arsipkan struk ini"
                           >
                             <Archive className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingReceipt(item)}
+                            className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                            title="Edit rincian struk ini"
+                            id={`btn-grid-edit-receipt-${item.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
 
                           <button
@@ -1467,6 +1494,18 @@ export default function ReceiptHistory({
                           <span>Keluarkan dari Arsip</span>
                         </button>
 
+                        {/* Edit Struk Arsip Button */}
+                        <button
+                          type="button"
+                          onClick={() => setEditingReceipt(item)}
+                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                          title="Edit struk arsip ini"
+                          id={`btn-edit-archived-receipt-${item.id}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
+
                         {/* Muat ke Generator Button */}
                         <button
                           type="button"
@@ -1591,7 +1630,7 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-1.5">
+                        <div className="grid grid-cols-4 gap-1.5">
                           <button
                             type="button"
                             onClick={() => onUnarchiveReceipt?.(item.id)}
@@ -1599,7 +1638,17 @@ export default function ReceiptHistory({
                             title="Keluarkan dari Arsip"
                           >
                             <ArchiveRestore className="w-3.5 h-3.5" />
-                            <span className="text-[11px]">Buka Arsip</span>
+                            <span className="text-[11px] hidden sm:inline">Buka</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingReceipt(item)}
+                            className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                            title="Edit Struk Arsip"
+                            id={`btn-grid-edit-archived-${item.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
 
                           <button
@@ -2016,6 +2065,19 @@ export default function ReceiptHistory({
           </div>
         </div>
       )}
+
+      {/* Modal Edit Struk Transaksi */}
+      <EditReceiptModal
+        isOpen={Boolean(editingReceipt)}
+        receipt={editingReceipt}
+        onClose={() => setEditingReceipt(null)}
+        onSave={(updatedReceipt) => {
+          onUpdateReceipt?.(updatedReceipt);
+          setEditingReceipt(null);
+        }}
+        onOpenInGenerator={onLoadReceipt}
+        currencySymbol={currencySymbol}
+      />
     </div>
   );
 }

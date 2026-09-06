@@ -250,6 +250,30 @@ export default function App() {
     }, 100);
   };
 
+  // Update an existing receipt in history or archived history directly
+  const handleUpdateReceipt = (updatedReceipt: Receipt) => {
+    const inHistory = history.some((item) => item.id === updatedReceipt.id);
+    if (inHistory) {
+      setHistory((prev) =>
+        prev.map((item) => (item.id === updatedReceipt.id ? updatedReceipt : item))
+      );
+      showToast(`✏️ Struk #${updatedReceipt.transactionId.split('/')[0]} berhasil diperbarui di Riwayat!`);
+      return;
+    }
+
+    const inArchived = archivedHistory.some((item) => item.id === updatedReceipt.id);
+    if (inArchived) {
+      setArchivedHistory((prev) =>
+        prev.map((item) => (item.id === updatedReceipt.id ? updatedReceipt : item))
+      );
+      showToast(`✏️ Struk arsip #${updatedReceipt.transactionId.split('/')[0]} berhasil diperbarui!`);
+      return;
+    }
+
+    setHistory((prev) => [updatedReceipt, ...prev.filter((item) => item.id !== updatedReceipt.id)]);
+    showToast(`✏️ Struk #${updatedReceipt.transactionId.split('/')[0]} berhasil diperbarui!`);
+  };
+
   // Toggle Pin / Favorite state for a receipt in history
   const handleTogglePinReceipt = (id: string) => {
     setHistory((prev) => {
@@ -612,6 +636,7 @@ export default function App() {
               archivedHistory={archivedHistory}
               trashHistory={trashHistory}
               onLoadReceipt={handleLoadReceipt}
+              onUpdateReceipt={handleUpdateReceipt}
               onTogglePinReceipt={handleTogglePinReceipt}
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
