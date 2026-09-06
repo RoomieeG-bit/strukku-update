@@ -27,7 +27,8 @@ import {
   Phone,
   Tag,
   Type,
-  Printer
+  Printer,
+  Pencil
 } from 'lucide-react';
 
 interface EditReceiptModalProps {
@@ -164,8 +165,8 @@ export default function EditReceiptModal({
     setCashReceived(rounded);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e?: React.FormEvent, finalizeDraft: boolean = false) => {
+    if (e) e.preventDefault();
 
     if (items.length === 0) {
       setFormError('Struk harus memiliki minimal 1 item belanja.');
@@ -208,6 +209,8 @@ export default function EditReceiptModal({
       notesFooter,
       fontFamily,
       paperSizePreset,
+      isDraft: receipt.isDraft ? !finalizeDraft : false,
+      draftSavedAt: (receipt.isDraft && !finalizeDraft) ? (receipt.draftSavedAt || new Date().toISOString()) : undefined,
     };
 
     onSave(updatedReceipt);
@@ -238,6 +241,11 @@ export default function EditReceiptModal({
                 <span className="text-[11px] font-mono font-semibold bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md">
                   #{transactionId.split('/')[0]}
                 </span>
+                {receipt.isDraft && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                    <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
+                  </span>
+                )}
                 {receipt.isArchived && (
                   <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md">
                     Arsip
@@ -885,15 +893,40 @@ export default function EditReceiptModal({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95"
-              id="btn-save-edited-receipt"
-            >
-              <Save className="w-4 h-4" />
-              <span>Simpan Perubahan</span>
-            </button>
+            {receipt.isDraft ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => handleSubmit(e, false)}
+                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                  id="btn-save-as-draft"
+                  title="Simpan perubahan tetap sebagai draf"
+                >
+                  <Save className="w-4 h-4 text-amber-700" />
+                  <span>Simpan Tetap Draf</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSubmit(e, true)}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95"
+                  id="btn-finalize-and-save-receipt"
+                  title="Finalisasikan draf ini dan langsung masukkan ke Semua Riwayat ledger"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Finalisasikan ke Riwayat</span>
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, false)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer shadow-xs active:scale-95"
+                id="btn-save-edited-receipt"
+              >
+                <Save className="w-4 h-4" />
+                <span>Simpan Perubahan</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

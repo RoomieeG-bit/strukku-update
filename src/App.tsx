@@ -206,13 +206,17 @@ export default function App() {
     localStorage.setItem('strukku_archived_history', JSON.stringify(archivedHistory));
   }, [archivedHistory]);
 
-  // Autosave current receipt state to localStorage every 1 second
+  // Autosave current receipt state to localStorage every 1 second (only if actively a draft)
   useEffect(() => {
     const timer = setInterval(() => {
       const current = receiptRef.current;
       if (current) {
         try {
-          localStorage.setItem('strukku_active_draft', JSON.stringify(current));
+          if (current.isDraft) {
+            localStorage.setItem('strukku_active_draft', JSON.stringify(current));
+          } else {
+            localStorage.removeItem('strukku_active_draft');
+          }
           setLastAutosavedAt(new Date());
         } catch (err) {
           console.error('Autosave interval error:', err);
@@ -228,6 +232,9 @@ export default function App() {
     const saveActiveDraftToLedger = () => {
       const current = receiptRef.current;
       if (!current) return;
+      // CRITICAL: Only save as draft if current is actually in draft mode!
+      // If the current receipt is already finalized (!current.isDraft), NEVER turn it into a draft!
+      if (!current.isDraft) return;
       // Skip saving empty receipts with 0 items
       if (!current.items || current.items.length === 0) return;
 
@@ -235,7 +242,7 @@ export default function App() {
         const draftToPersist: Receipt = {
           ...current,
           isDraft: true,
-          draftSavedAt: new Date().toISOString(),
+          draftSavedAt: current.draftSavedAt || new Date().toISOString(),
         };
 
         const rawHistory = localStorage.getItem('strukku_history');
@@ -306,31 +313,47 @@ export default function App() {
     }, 3000);
   };
 
-  // Save the currently generated receipt to local history (finalizing if currently draft)
+  // Save the currently generated receipt to local history (finalizing and immediately moving to Semua Riwayat)
   const handleSaveReceipt = () => {
     if (receipt.items.length === 0) return;
 
-    let finalReceiptToSave: Receipt = {
+    const finalReceiptToSave: Receipt = {
       ...receipt,
       isDraft: false,
       draftSavedAt: undefined,
     };
 
+    // Update active receipt state and ref to finalized immediately
+    setReceipt(finalReceiptToSave);
+    receiptRef.current = finalReceiptToSave;
+
+    // Clear active draft in localStorage once finalized
+    localStorage.removeItem('strukku_active_draft');
+
+    // Update history state and localStorage
     setHistory((prev) => {
       const existingIdx = prev.findIndex(
         (item) => item.id === finalReceiptToSave.id || item.transactionId === finalReceiptToSave.transactionId
       );
 
+      let updated: Receipt[];
       if (existingIdx >= 0) {
-        return prev.map((item, idx) => (idx === existingIdx ? finalReceiptToSave : item));
+        updated = prev.map((item, idx) => (idx === existingIdx ? finalReceiptToSave : item));
       } else {
-        return [finalReceiptToSave, ...prev];
+        updated = [finalReceiptToSave, ...prev];
       }
+      try {
+        localStorage.setItem('strukku_history', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error saving history to localStorage:', err);
+      }
+      return updated;
     });
 
-    // Clear active draft in localStorage once finalized
-    localStorage.removeItem('strukku_active_draft');
-    showToast(`✅ Struk #${finalReceiptToSave.transactionId.split('/')[0]} berhasil difinalisasi dan disimpan ke Riwayat!`);
+    showToast(`✅ Struk #${finalReceiptToSave.transactionId.split('/')[0]} berhasil difinalisasi dan langsung masuk ke Semua Riwayat!`);
+
+    // Immediately switch to the history view so user sees it in "Semua Riwayat" right away
+    setActiveView('history');
   };
 
   // Start a fresh, new transaction with an automatically generated unique ID and default store name
@@ -413,6 +436,67 @@ export default function App() {
 
     setHistory((prev) => [updatedReceipt, ...prev.filter((item) => item.id !== updatedReceipt.id)]);
     showToast(`✏️ Struk #${updatedReceipt.transactionId.split('/')[0]} berhasil diperbarui!`);
+  };
+
+  // Finalize a draft receipt directly into active history ledger (Semua Riwayat)
+  const handleFinalizeReceipt = (id: string) => {
+    let finalizedItemName = '';
+    setHistory((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (!target) return prev;
+      finalizedItemName = target.transactionId.split('/')[0];
+      const finalizedItem: Receipt = {
+        ...target,
+        isDraft: false,
+        draftSavedAt: undefined,
+      };
+
+      // If active receipt in generator matches this draft, update it too
+      if (receiptRef.current?.id === id || receiptRef.current?.transactionId === target.transactionId) {
+        setReceipt(finalizedItem);
+        receiptRef.current = finalizedItem;
+        localStorage.removeItem('strukku_active_draft');
+      }
+
+      const updated = prev.map((item) => (item.id === id ? finalizedItem : item));
+      try {
+        localStorage.setItem('strukku_history', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error saving history after finalizing draft:', err);
+      }
+      return updated;
+    });
+
+    showToast(`✅ Draf #${finalizedItemName} berhasil difinalisasi dan langsung masuk ke Semua Riwayat!`);
+  };
+
+  // Finalize ALL draft receipts at once into active history ledger
+  const handleFinalizeAllDrafts = () => {
+    const draftCount = history.filter((item) => item.isDraft).length;
+    if (draftCount === 0) return;
+
+    setHistory((prev) => {
+      const updated = prev.map((item) =>
+        item.isDraft
+          ? { ...item, isDraft: false, draftSavedAt: undefined }
+          : item
+      );
+      try {
+        localStorage.setItem('strukku_history', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error saving history after finalizing all drafts:', err);
+      }
+      return updated;
+    });
+
+    if (receiptRef.current?.isDraft) {
+      const finalizedCurrent = { ...receiptRef.current, isDraft: false, draftSavedAt: undefined };
+      setReceipt(finalizedCurrent);
+      receiptRef.current = finalizedCurrent;
+      localStorage.removeItem('strukku_active_draft');
+    }
+
+    showToast(`✅ ${draftCount} draf transaksi berhasil difinalisasi dan langsung masuk ke Semua Riwayat!`);
   };
 
   // Toggle Pin / Favorite state for a receipt in history
@@ -709,12 +793,12 @@ export default function App() {
             </button>
             <button
               onClick={() => {
-                // Ensure in-progress receipt with items is saved as draft so it appears in history immediately
-                if (receipt.items && receipt.items.length > 0) {
+                // Only save current receipt as draft if it is actively in draft mode and has items
+                if (receipt.isDraft && receipt.items && receipt.items.length > 0) {
                   const draftToPersist: Receipt = {
                     ...receipt,
                     isDraft: true,
-                    draftSavedAt: new Date().toISOString(),
+                    draftSavedAt: receipt.draftSavedAt || new Date().toISOString(),
                   };
                   setHistory((prev) => {
                     const existingIdx = prev.findIndex(
@@ -836,6 +920,8 @@ export default function App() {
               onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
               onClearDrafts={handleClearDrafts}
+              onFinalizeReceipt={handleFinalizeReceipt}
+              onFinalizeAllDrafts={handleFinalizeAllDrafts}
               onNavigateToGenerator={() => setActiveView('generator')}
               onArchiveReceipt={handleArchiveReceipt}
               onArchiveAllHistory={handleArchiveAllHistory}

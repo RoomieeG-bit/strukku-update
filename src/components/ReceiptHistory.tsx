@@ -53,6 +53,8 @@ interface ReceiptHistoryProps {
   onDeleteReceipt: (id: string) => void;
   onClearHistory: () => void;
   onClearDrafts?: () => void;
+  onFinalizeReceipt?: (id: string) => void;
+  onFinalizeAllDrafts?: () => void;
   onNavigateToGenerator?: () => void;
   onArchiveReceipt?: (id: string) => void;
   onArchiveAllHistory?: () => void;
@@ -78,6 +80,8 @@ export default function ReceiptHistory({
   onDeleteReceipt,
   onClearHistory,
   onClearDrafts,
+  onFinalizeReceipt,
+  onFinalizeAllDrafts,
   onNavigateToGenerator,
   onArchiveReceipt,
   onArchiveAllHistory,
@@ -576,6 +580,31 @@ export default function ReceiptHistory({
           </div>
         ) : activeTab === 'drafts' ? (
           <div className="flex flex-wrap items-center gap-2">
+            {draftHistory.length > 0 && onFinalizeAllDrafts && (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmModal({
+                    isOpen: true,
+                    title: 'Finalisasikan Semua Draf Transaksi?',
+                    message: `Apakah Anda yakin ingin memfinalisasikan seluruh (${draftHistory.length}) draf struk dan langsung memasukkannya ke Semua Riwayat?`,
+                    confirmLabel: 'Finalisasikan Semua ke Riwayat',
+                    variant: 'emerald',
+                    onConfirm: () => {
+                      onFinalizeAllDrafts();
+                      setActiveTab('active');
+                    },
+                  });
+                }}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                title="Finalisasi semua draf sekaligus dan langsung masukkan ke Semua Riwayat"
+                id="btn-finalize-all-drafts"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Finalisasikan Semua ({draftHistory.length})</span>
+              </button>
+            )}
+
             {draftHistory.length > 0 && (
               <button
                 type="button"
@@ -1564,6 +1593,22 @@ export default function ReceiptHistory({
                         </div>
 
                         <div className="flex items-center gap-1.5">
+                          {onFinalizeReceipt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onFinalizeReceipt(item.id);
+                                setActiveTab('active');
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                              title="Finalisasikan draf ini dan langsung masukkan ke Semua Riwayat"
+                              id={`btn-finalize-draft-${item.id}`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Finalisasi</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => onLoadReceipt(item)}
@@ -1673,34 +1718,52 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1">
-                          <button
-                            type="button"
-                            onClick={() => onLoadReceipt(item)}
-                            className="col-span-2 py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
-                            title="Lanjutkan draf struk ini ke Generator"
-                          >
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                            <span className="text-[11px]">Lanjutkan</span>
-                          </button>
+                        <div className="space-y-1.5">
+                          {onFinalizeReceipt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onFinalizeReceipt(item.id);
+                                setActiveTab('active');
+                              }}
+                              className="w-full py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Finalisasikan draf ini dan langsung masukkan ke Semua Riwayat"
+                              id={`btn-grid-finalize-draft-${item.id}`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Finalisasikan ke Riwayat</span>
+                            </button>
+                          )}
 
-                          <button
-                            type="button"
-                            onClick={() => setEditingReceipt(item)}
-                            className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
-                            title="Edit Data Draf"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="grid grid-cols-4 gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onLoadReceipt(item)}
+                              className="col-span-2 py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Lanjutkan draf struk ini ke Generator"
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">Lanjutkan</span>
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => onDeleteReceipt(item.id)}
-                            className="py-1.5 px-2 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
-                            title="Hapus draf (ke Sampah)"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingReceipt(item)}
+                              className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Edit Data Draf"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => onDeleteReceipt(item.id)}
+                              className="py-1.5 px-2 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer"
+                              title="Hapus draf (ke Sampah)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1734,17 +1797,44 @@ export default function ReceiptHistory({
                 </div>
               </div>
 
-              {sortedDraftHistory.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onLoadReceipt(sortedDraftHistory[0])}
-                  className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
-                  title="Lanjutkan pengerjaan draf struk paling baru"
-                >
-                  <ArrowUpRight className="w-4 h-4" />
-                  <span>Lanjutkan Draf Terbaru</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {onFinalizeAllDrafts && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmModal({
+                        isOpen: true,
+                        title: 'Finalisasikan Semua Draf Transaksi?',
+                        message: `Apakah Anda yakin ingin memfinalisasikan seluruh (${draftHistory.length}) draf struk dan langsung memasukkannya ke Semua Riwayat?`,
+                        confirmLabel: 'Finalisasikan Semua ke Riwayat',
+                        variant: 'emerald',
+                        onConfirm: () => {
+                          onFinalizeAllDrafts();
+                          setActiveTab('active');
+                        },
+                      });
+                    }}
+                    className="flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+                    title="Finalisasi semua draf sekaligus dan langsung masukkan ke Semua Riwayat"
+                    id="btn-bottom-finalize-all-drafts"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Finalisasikan Semua Draf</span>
+                  </button>
+                )}
+
+                {sortedDraftHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onLoadReceipt(sortedDraftHistory[0])}
+                    className="flex-1 sm:flex-initial px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs active:scale-95 shrink-0"
+                    title="Lanjutkan pengerjaan draf struk paling baru"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    <span>Lanjutkan Draf Terbaru</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </>
