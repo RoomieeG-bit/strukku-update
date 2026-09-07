@@ -59,7 +59,8 @@ import {
   FileCheck,
   Boxes,
   Package,
-  Calculator
+  Calculator,
+  MapPin
 } from 'lucide-react';
 
 interface ReceiptFormProps {
@@ -71,6 +72,8 @@ interface ReceiptFormProps {
   setCurrencySymbol: (symbol: string) => void;
   defaultStoreName?: string;
   onSetDefaultStoreName?: (storeName: string) => void;
+  defaultStoreAddress?: string;
+  onSetDefaultStoreAddress?: (storeAddress: string) => void;
   lastAutosavedAt?: Date | null;
 }
 
@@ -191,6 +194,8 @@ export default function ReceiptForm({
   setCurrencySymbol,
   defaultStoreName,
   onSetDefaultStoreName,
+  defaultStoreAddress,
+  onSetDefaultStoreAddress,
   lastAutosavedAt,
 }: ReceiptFormProps) {
   // Local state for adding a single item
@@ -982,15 +987,58 @@ export default function ReceiptForm({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="store-address-input">Alamat Toko</label>
-                <input
-                  type="text"
-                  id="store-address-input"
-                  value={receipt.storeAddress}
-                  onChange={(e) => handleRecalculate({ storeAddress: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
-                  placeholder="Jl. Raya Utama No. 123"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-700" htmlFor="store-address-input">
+                    Alamat Toko
+                  </label>
+                  {defaultStoreAddress && (
+                    receipt.storeAddress === defaultStoreAddress ? (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5 text-emerald-600" /> Alamat Default
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculate({ storeAddress: defaultStoreAddress })}
+                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title={`Pakai alamat default: ${defaultStoreAddress}`}
+                      >
+                        Pakai Default
+                      </button>
+                    )
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <MapPin className="w-4 h-4 text-slate-400" />
+                  </span>
+                  <input
+                    type="text"
+                    id="store-address-input"
+                    value={receipt.storeAddress}
+                    onChange={(e) => handleRecalculate({ storeAddress: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    placeholder="Jl. Raya Utama No. 123"
+                  />
+                </div>
+                {defaultStoreAddress && receipt.storeAddress !== defaultStoreAddress && onSetDefaultStoreAddress && (
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="truncate max-w-[170px]" title={defaultStoreAddress}>
+                      Default: <strong className="font-mono text-slate-700">{defaultStoreAddress}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = receipt.storeAddress.trim();
+                        if (trimmed) onSetDefaultStoreAddress(trimmed);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline shrink-0"
+                      title="Simpan alamat ini sebagai alamat toko default baru"
+                    >
+                      Jadikan Default
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="store-phone-input">No. Telepon</label>
@@ -3321,7 +3369,7 @@ export default function ReceiptForm({
         <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
           <div className="flex items-center gap-1.5 font-medium text-emerald-700">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Autosave aktif (tiap detik) • Draf tersimpan di riwayat saat browser ditutup</span>
+            <span>Autosave aktif • Tersimpan otomatis di perangkat</span>
           </div>
           {receipt.isDraft && (
             <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">

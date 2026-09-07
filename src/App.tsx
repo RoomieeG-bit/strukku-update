@@ -37,10 +37,11 @@ const DEFAULT_ITEMS: Item[] = [
   { id: '2', name: 'Roti Bakar Cokelat', quantity: 1, price: 15000 },
 ];
 
-function getFreshDefaultReceipt(customStoreName?: string): Receipt {
+function getFreshDefaultReceipt(customStoreName?: string, customStoreAddress?: string): Receipt {
   const initialTxId = generateTransactionId();
   const initialDate = getInitialLocalDateTime();
   const defaultStore = customStoreName || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_name') : null) || 'KOPI SENJA CIPUTAT';
+  const defaultAddress = customStoreAddress || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_address') : null) || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
   const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
     DEFAULT_ITEMS,
     11, // Standard PPN 11%
@@ -51,7 +52,7 @@ function getFreshDefaultReceipt(customStoreName?: string): Receipt {
   return {
     id: Date.now().toString(),
     storeName: defaultStore,
-    storeAddress: 'Jl. Raya Ciputat Raya No. 42, Jakarta',
+    storeAddress: defaultAddress,
     storePhone: '021-7401234',
     storeWebsite: 'www.kopisenjaabadi.com',
     cashierName: 'Andi Wijaya',
@@ -80,6 +81,8 @@ function getFreshDefaultReceipt(customStoreName?: string): Receipt {
     qrSize: 90,
     barcodeValue: '',
     showBarcodeNumber: true,
+    isDraft: true,
+    draftSavedAt: new Date().toISOString(),
   };
 }
 
@@ -95,6 +98,11 @@ export default function App() {
   // Default Store Name setting (persisted in localStorage)
   const [defaultStoreName, setDefaultStoreName] = useState<string>(() => {
     return localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
+  });
+
+  // Default Store Address setting (persisted in localStorage)
+  const [defaultStoreAddress, setDefaultStoreAddress] = useState<string>(() => {
+    return localStorage.getItem('strukku_default_store_address') || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
   });
 
   // Main history log of saved transactions
@@ -149,6 +157,7 @@ export default function App() {
   // Active receipt state in the editor with autosave draft recovery
   const [receipt, setReceipt] = useState<Receipt>(() => {
     const savedDefaultStore = localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
+    const savedDefaultAddress = localStorage.getItem('strukku_default_store_address') || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
     try {
       const activeDraftRaw = localStorage.getItem('strukku_active_draft');
       if (activeDraftRaw) {
@@ -160,7 +169,7 @@ export default function App() {
     } catch (e) {
       console.error('Error restoring active draft on init:', e);
     }
-    return getFreshDefaultReceipt(savedDefaultStore);
+    return getFreshDefaultReceipt(savedDefaultStore, savedDefaultAddress);
   });
 
   // Track last autosave timestamp
@@ -206,44 +215,52 @@ export default function App() {
     localStorage.setItem('strukku_archived_history', JSON.stringify(archivedHistory));
   }, [archivedHistory]);
 
-  // Autosave current receipt state to localStorage every 1 second (only if actively a draft)
+  // 1. Continuous reactive autosave on every receipt change:
+  // Whenever the user types, adds an item, changes price, cashier, or store name on mobile or desktop,
+  // it is IMMEDIATELY persisted to localStorage. This guarantees zero data loss on mobile devices
+  // even if the user locks the screen, switches apps, or refreshes before any timer fires.
+  useEffect(() => {
+    if (!receipt) return;
+    try {
+      localStorage.setItem('strukku_active_draft', JSON.stringify(receipt));
+      setLastAutosavedAt(new Date());
+    } catch (err) {
+      console.error('Reactive autosave error:', err);
+    }
+  }, [receipt]);
+
+  // 2. Periodic heartbeat autosave (every 2 seconds) to keep timestamp updated and guarantee sync
   useEffect(() => {
     const timer = setInterval(() => {
       const current = receiptRef.current;
       if (current) {
         try {
-          if (current.isDraft) {
-            localStorage.setItem('strukku_active_draft', JSON.stringify(current));
-          } else {
-            localStorage.removeItem('strukku_active_draft');
-          }
+          localStorage.setItem('strukku_active_draft', JSON.stringify(current));
           setLastAutosavedAt(new Date());
         } catch (err) {
           console.error('Autosave interval error:', err);
         }
       }
-    }, 1000);
+    }, 2000);
 
     return () => clearInterval(timer);
   }, []);
 
-  // Save current receipt as draft in history ledger when browser is closed or refreshed
+  // 3. Mobile Lifecycle & Exit handler:
+  // Saves current unfinalized receipt to history ledger as a draft when:
+  // - User switches apps or minimizes browser on mobile (visibilitychange 'hidden')
+  // - User closes tab or navigates away (pagehide, beforeunload)
+  // - Mobile browser freezes the tab to save memory (freeze)
   useEffect(() => {
     const saveActiveDraftToLedger = () => {
       const current = receiptRef.current;
       if (!current) return;
-      // CRITICAL: Only save as draft if current is actually in draft mode!
-      // If the current receipt is already finalized (!current.isDraft), NEVER turn it into a draft!
-      if (!current.isDraft) return;
       // Skip saving empty receipts with 0 items
       if (!current.items || current.items.length === 0) return;
 
       try {
-        const draftToPersist: Receipt = {
-          ...current,
-          isDraft: true,
-          draftSavedAt: current.draftSavedAt || new Date().toISOString(),
-        };
+        // Ensure active draft in localStorage is up to date
+        localStorage.setItem('strukku_active_draft', JSON.stringify(current));
 
         const rawHistory = localStorage.getItem('strukku_history');
         let currentHistory: Receipt[] = [];
@@ -257,8 +274,20 @@ export default function App() {
         }
 
         const existingIdx = currentHistory.findIndex(
-          (item) => item.id === draftToPersist.id || item.transactionId === draftToPersist.transactionId
+          (item) => item.id === current.id || item.transactionId === current.transactionId
         );
+
+        // CRITICAL PROTECTION: If this receipt is already finalized in history (!isDraft),
+        // NEVER convert or overwrite it as a draft!
+        if (existingIdx >= 0 && !currentHistory[existingIdx].isDraft) {
+          return;
+        }
+
+        const draftToPersist: Receipt = {
+          ...current,
+          isDraft: true,
+          draftSavedAt: current.draftSavedAt || new Date().toISOString(),
+        };
 
         let updatedHistory: Receipt[];
         if (existingIdx >= 0) {
@@ -268,14 +297,15 @@ export default function App() {
         }
 
         localStorage.setItem('strukku_history', JSON.stringify(updatedHistory));
-        localStorage.setItem('strukku_active_draft', JSON.stringify(draftToPersist));
+        setHistory(updatedHistory);
       } catch (err) {
-        console.error('Error auto-saving draft on browser close:', err);
+        console.error('Error auto-saving draft on browser/mobile close:', err);
       }
     };
 
     window.addEventListener('beforeunload', saveActiveDraftToLedger);
     window.addEventListener('pagehide', saveActiveDraftToLedger);
+    window.addEventListener('freeze', saveActiveDraftToLedger);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -287,6 +317,7 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeunload', saveActiveDraftToLedger);
       window.removeEventListener('pagehide', saveActiveDraftToLedger);
+      window.removeEventListener('freeze', saveActiveDraftToLedger);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -301,6 +332,20 @@ export default function App() {
       setReceipt((prev) => ({
         ...prev,
         storeName: trimmed,
+      }));
+    }
+  };
+
+  // Update default store address setting and optionally update active receipt
+  const handleSetDefaultStoreAddress = (newStoreAddress: string, applyToCurrent: boolean = true) => {
+    const trimmed = newStoreAddress.trim();
+    if (!trimmed) return;
+    setDefaultStoreAddress(trimmed);
+    localStorage.setItem('strukku_default_store_address', trimmed);
+    if (applyToCurrent) {
+      setReceipt((prev) => ({
+        ...prev,
+        storeAddress: trimmed,
       }));
     }
   };
@@ -350,17 +395,28 @@ export default function App() {
       return updated;
     });
 
+    // Prepare a clean fresh receipt in generator for the next customer
+    const nextFreshReceipt = getFreshDefaultReceipt(defaultStoreName, defaultStoreAddress);
+    setReceipt(nextFreshReceipt);
+    receiptRef.current = nextFreshReceipt;
+    try {
+      localStorage.setItem('strukku_active_draft', JSON.stringify(nextFreshReceipt));
+    } catch (err) {
+      console.error('Error saving fresh draft to storage:', err);
+    }
+
     showToast(`✅ Struk #${finalReceiptToSave.transactionId.split('/')[0]} berhasil difinalisasi dan langsung masuk ke Semua Riwayat!`);
 
     // Immediately switch to the history view so user sees it in "Semua Riwayat" right away
     setActiveView('history');
   };
 
-  // Start a fresh, new transaction with an automatically generated unique ID and default store name
+  // Start a fresh, new transaction with an automatically generated unique ID, default store name & default address
   const handleNewReceipt = () => {
     const nextTxId = generateTransactionId();
     const formattedNow = getInitialLocalDateTime();
     const effectiveStore = defaultStoreName || 'KOPI SENJA CIPUTAT';
+    const effectiveAddress = defaultStoreAddress || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
     
     setReceipt((prev) => {
       const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
@@ -370,10 +426,11 @@ export default function App() {
         'PERCENT'
       );
       
-      return {
+      const newReceipt: Receipt = {
         ...prev,
         id: Date.now().toString(),
         storeName: effectiveStore,
+        storeAddress: effectiveAddress,
         transactionId: nextTxId,
         dateTime: formattedNow,
         items: [],
@@ -384,13 +441,19 @@ export default function App() {
         total,
         cashReceived: 0,
         changeAmount: 0,
-        isDraft: false,
-        draftSavedAt: undefined,
+        isDraft: true,
+        draftSavedAt: new Date().toISOString(),
       };
+
+      try {
+        localStorage.setItem('strukku_active_draft', JSON.stringify(newReceipt));
+      } catch (e) {
+        console.error('Error saving new draft:', e);
+      }
+      
+      return newReceipt;
     });
     
-    // Clear active draft in localStorage
-    localStorage.removeItem('strukku_active_draft');
     showToast(`Transaksi Baru Dimulai! ID: ${nextTxId.split('/')[0]}`);
   };
 
@@ -712,7 +775,8 @@ export default function App() {
     setTrashHistory([]);
     setCurrencySymbol('Rp');
     setDefaultStoreName('KOPI SENJA CIPUTAT');
-    setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT'));
+    setDefaultStoreAddress('Jl. Raya Ciputat Raya No. 42, Jakarta');
+    setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT', 'Jl. Raya Ciputat Raya No. 42, Jakarta'));
     showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
   };
 
@@ -723,6 +787,7 @@ export default function App() {
     customPresets?: any[];
     currencySymbol?: string;
     defaultStoreName?: string;
+    defaultStoreAddress?: string;
     activeReceipt?: Receipt;
   }) => {
     if (Array.isArray(backupData.history)) {
@@ -743,6 +808,10 @@ export default function App() {
     if (backupData.defaultStoreName) {
       setDefaultStoreName(backupData.defaultStoreName);
       localStorage.setItem('strukku_default_store_name', backupData.defaultStoreName);
+    }
+    if (backupData.defaultStoreAddress) {
+      setDefaultStoreAddress(backupData.defaultStoreAddress);
+      localStorage.setItem('strukku_default_store_address', backupData.defaultStoreAddress);
     }
     if (backupData.activeReceipt && typeof backupData.activeReceipt === 'object') {
       setReceipt(backupData.activeReceipt);
@@ -793,21 +862,36 @@ export default function App() {
             </button>
             <button
               onClick={() => {
-                // Only save current receipt as draft if it is actively in draft mode and has items
-                if (receipt.isDraft && receipt.items && receipt.items.length > 0) {
-                  const draftToPersist: Receipt = {
-                    ...receipt,
-                    isDraft: true,
-                    draftSavedAt: receipt.draftSavedAt || new Date().toISOString(),
-                  };
+                // Safely save current unfinalized receipt with items as draft
+                if (receipt.items && receipt.items.length > 0) {
                   setHistory((prev) => {
                     const existingIdx = prev.findIndex(
-                      (item) => item.id === draftToPersist.id || item.transactionId === draftToPersist.transactionId
+                      (item) => item.id === receipt.id || item.transactionId === receipt.transactionId
                     );
-                    if (existingIdx >= 0) {
-                      return prev.map((item, idx) => (idx === existingIdx ? draftToPersist : item));
+                    // CRITICAL PROTECTION: If already in history as finalized, DO NOT overwrite as draft!
+                    if (existingIdx >= 0 && !prev[existingIdx].isDraft) {
+                      return prev;
                     }
-                    return [draftToPersist, ...prev];
+
+                    const draftToPersist: Receipt = {
+                      ...receipt,
+                      isDraft: true,
+                      draftSavedAt: receipt.draftSavedAt || new Date().toISOString(),
+                    };
+
+                    let updated: Receipt[];
+                    if (existingIdx >= 0) {
+                      updated = prev.map((item, idx) => (idx === existingIdx ? draftToPersist : item));
+                    } else {
+                      updated = [draftToPersist, ...prev];
+                    }
+
+                    try {
+                      localStorage.setItem('strukku_history', JSON.stringify(updated));
+                    } catch (e) {
+                      console.error('Error saving history draft on tab switch:', e);
+                    }
+                    return updated;
                   });
                 }
                 setActiveView('history');
@@ -856,16 +940,16 @@ export default function App() {
           </nav>
 
           {/* Header Utilities */}
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <div 
-              className="flex items-center gap-1.5 border border-emerald-200/80 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 shadow-2xs"
-              title="Autosave aktif setiap 1 detik. Draf tersimpan otomatis ke Riwayat Ledger saat browser ditutup."
+              className="flex items-center gap-1.5 border border-emerald-200/80 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 shadow-2xs"
+              title="Autosave aktif. Draf struk tersimpan otomatis secara instan di perangkat Anda."
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-              <span className="text-[11px] font-medium hidden md:inline">Autosave 1s</span>
+              <span className="text-[11px] font-medium hidden sm:inline">Autosave Aktif</span>
             </div>
 
-            <div className="flex items-center gap-1.5 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50/50 text-slate-700">
+            <div className="hidden sm:flex items-center gap-1.5 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50/50 text-slate-700">
               <span>Mata Uang:</span>
               <span className="text-slate-900 font-mono">{currencySymbol}</span>
             </div>
@@ -891,6 +975,8 @@ export default function App() {
                 setCurrencySymbol={setCurrencySymbol}
                 defaultStoreName={defaultStoreName}
                 onSetDefaultStoreName={handleSetDefaultStoreName}
+                defaultStoreAddress={defaultStoreAddress}
+                onSetDefaultStoreAddress={handleSetDefaultStoreAddress}
                 lastAutosavedAt={lastAutosavedAt}
               />
             </div>
@@ -959,6 +1045,8 @@ export default function App() {
               onSetCurrencySymbol={setCurrencySymbol}
               defaultStoreName={defaultStoreName}
               onSetDefaultStoreName={handleSetDefaultStoreName}
+              defaultStoreAddress={defaultStoreAddress}
+              onSetDefaultStoreAddress={handleSetDefaultStoreAddress}
               onResetAllData={handleResetAllData}
               onRestoreBackup={handleRestoreBackup}
               showToast={showToast}

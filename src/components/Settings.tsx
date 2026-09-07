@@ -26,7 +26,8 @@ import {
   ArrowDownToLine,
   RefreshCw,
   Store,
-  Sparkles
+  Sparkles,
+  MapPin
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -36,6 +37,8 @@ interface SettingsProps {
   onSetCurrencySymbol: (currency: string) => void;
   defaultStoreName: string;
   onSetDefaultStoreName: (storeName: string, applyToCurrent?: boolean) => void;
+  defaultStoreAddress?: string;
+  onSetDefaultStoreAddress?: (storeAddress: string, applyToCurrent?: boolean) => void;
   onResetAllData: () => void;
   onRestoreBackup: (backupData: {
     history?: Receipt[];
@@ -43,6 +46,7 @@ interface SettingsProps {
     currencySymbol?: string;
     activeReceipt?: Receipt;
     defaultStoreName?: string;
+    defaultStoreAddress?: string;
   }) => void;
   showToast: (message: string) => void;
 }
@@ -54,12 +58,26 @@ export default function Settings({
   onSetCurrencySymbol,
   defaultStoreName,
   onSetDefaultStoreName,
+  defaultStoreAddress,
+  onSetDefaultStoreAddress,
   onResetAllData,
   onRestoreBackup,
   showToast,
 }: SettingsProps) {
   const [storeNameInput, setStoreNameInput] = useState(defaultStoreName);
+  const [storeAddressInput, setStoreAddressInput] = useState(defaultStoreAddress || '');
   const [applyToCurrentReceipt, setApplyToCurrentReceipt] = useState(true);
+  const [applyAddressToCurrentReceipt, setApplyAddressToCurrentReceipt] = useState(true);
+
+  useEffect(() => {
+    setStoreNameInput(defaultStoreName);
+  }, [defaultStoreName]);
+
+  useEffect(() => {
+    if (defaultStoreAddress) {
+      setStoreAddressInput(defaultStoreAddress);
+    }
+  }, [defaultStoreAddress]);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [resetConfirmInput, setResetConfirmInput] = useState('');
   const [copiedBackupJson, setCopiedBackupJson] = useState(false);
@@ -133,12 +151,15 @@ export default function Settings({
         totalCustomPresets: customPresets.length,
         defaultCurrency: currencySymbol,
         defaultStoreName: defaultStoreName,
+        defaultStoreAddress: defaultStoreAddress,
       },
       settings: {
         currency: currencySymbol,
         defaultStoreName: defaultStoreName,
+        defaultStoreAddress: defaultStoreAddress,
       },
       defaultStoreName: defaultStoreName,
+      defaultStoreAddress: defaultStoreAddress,
       customPresets: customPresets,
       history: history,
       activeDraftReceipt: receipt,
@@ -202,6 +223,7 @@ export default function Settings({
         let importedCurrency: string | undefined;
         let importedActiveReceipt: Receipt | undefined;
         let importedDefaultStoreName: string | undefined;
+        let importedDefaultStoreAddress: string | undefined;
 
         if (Array.isArray(parsed)) {
           // Legacy array of receipts
@@ -220,12 +242,15 @@ export default function Settings({
           if (parsed.settings?.defaultStoreName || parsed.defaultStoreName) {
             importedDefaultStoreName = parsed.settings?.defaultStoreName || parsed.defaultStoreName;
           }
+          if (parsed.settings?.defaultStoreAddress || parsed.defaultStoreAddress) {
+            importedDefaultStoreAddress = parsed.settings?.defaultStoreAddress || parsed.defaultStoreAddress;
+          }
           if (parsed.activeDraftReceipt && typeof parsed.activeDraftReceipt === 'object') {
             importedActiveReceipt = parsed.activeDraftReceipt;
           }
         }
 
-        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency && !importedDefaultStoreName) {
+        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency && !importedDefaultStoreName && !importedDefaultStoreAddress) {
           setImportFeedback({
             type: 'error',
             message: 'Format file JSON tidak valid atau tidak memiliki data transaksi/preset STRUKKU.',
@@ -240,6 +265,7 @@ export default function Settings({
           currencySymbol: importedCurrency,
           activeReceipt: importedActiveReceipt,
           defaultStoreName: importedDefaultStoreName,
+          defaultStoreAddress: importedDefaultStoreAddress,
         });
 
         calculateStorageUsage();
@@ -614,6 +640,140 @@ export default function Settings({
                     >
                       {sug}
                       {defaultStoreName === sug && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ALAMAT TOKO DEFAULT */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4" id="section-default-store-address">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Alamat Toko Default
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 font-sans">
+                      Terus Dipakai
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Alamat outlet atau toko utama yang akan otomatis digunakan pada kolom Alamat Toko struk baru.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="input-default-store-address">
+                  Alamat Toko yang Terus Dipakai:
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <MapPin className="w-4 h-4 text-slate-400" />
+                    </span>
+                    <input
+                      type="text"
+                      id="input-default-store-address"
+                      value={storeAddressInput}
+                      onChange={(e) => setStoreAddressInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const trimmed = storeAddressInput.trim();
+                          if (trimmed && onSetDefaultStoreAddress) {
+                            onSetDefaultStoreAddress(trimmed, applyAddressToCurrentReceipt);
+                            showToast(`Alamat Toko Default disimpan: "${trimmed}"`);
+                          }
+                        }
+                      }}
+                      placeholder="Contoh: Jl. Raya Ciputat Raya No. 42, Jakarta"
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-white text-slate-900 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = storeAddressInput.trim();
+                      if (!trimmed) {
+                        showToast('Alamat toko default tidak boleh kosong.');
+                        return;
+                      }
+                      if (onSetDefaultStoreAddress) {
+                        onSetDefaultStoreAddress(trimmed, applyAddressToCurrentReceipt);
+                        showToast(`Alamat Toko Default berhasil disimpan: "${trimmed}"`);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 shrink-0"
+                    id="btn-save-default-store-address"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox: Terapkan juga ke struk aktif */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={applyAddressToCurrentReceipt}
+                  onChange={(e) => setApplyAddressToCurrentReceipt(e.target.checked)}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                <span>Terapkan juga langsung ke struk yang sedang dibuat saat ini</span>
+              </label>
+
+              {/* Status Note */}
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-xs text-emerald-900 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-slate-900">
+                    Alamat Toko Aktif: <span className="font-mono text-emerald-800 bg-emerald-100/70 px-1.5 py-0.5 rounded">{defaultStoreAddress || 'Belum diatur'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Setiap kali Anda menekan tombol <strong>Transaksi Baru</strong> atau memulai struk baru, alamat ini akan langsung terisi secara konsisten.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Suggestion Presets */}
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Preset Cepat Alamat Toko Populer:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Jl. Raya Ciputat Raya No. 42, Jakarta',
+                    'Mall Kelapa Gading Lt. 2, Jakarta Utara',
+                    'Jl. Malioboro No. 15, Yogyakarta',
+                    'Jl. Braga No. 88, Bandung',
+                    'Ruko Grand Galaxy City Blok RGB No. 5, Bekasi',
+                    'Jl. Pemuda No. 70, Semarang'
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setStoreAddressInput(sug);
+                        if (onSetDefaultStoreAddress) {
+                          onSetDefaultStoreAddress(sug, applyAddressToCurrentReceipt);
+                          showToast(`Alamat Toko Default diatur ke: "${sug}"`);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer border ${
+                        defaultStoreAddress === sug
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {sug}
+                      {defaultStoreAddress === sug && ' ✓'}
                     </button>
                   ))}
                 </div>
