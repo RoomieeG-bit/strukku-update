@@ -57,6 +57,7 @@ interface ReceiptHistoryProps {
   onFinalizeAllDrafts?: () => void;
   onNavigateToGenerator?: () => void;
   onArchiveReceipt?: (id: string) => void;
+  onBulkArchiveReceipts?: (ids: string[]) => void;
   onArchiveAllHistory?: () => void;
   onUnarchiveReceipt?: (id: string) => void;
   onUnarchiveAll?: () => void;
@@ -64,6 +65,7 @@ interface ReceiptHistoryProps {
   onClearArchivedHistory?: () => void;
   onRestoreReceipt?: (id: string) => void;
   onRestoreAllTrash?: () => void;
+  onBulkDeleteReceipts?: (ids: string[]) => void;
   onPermanentDeleteReceipt?: (id: string) => void;
   onEmptyTrash?: () => void;
   onImportHistory: (imported: Receipt[]) => void;
@@ -78,12 +80,14 @@ export default function ReceiptHistory({
   onUpdateReceipt,
   onTogglePinReceipt,
   onDeleteReceipt,
+  onBulkDeleteReceipts,
   onClearHistory,
   onClearDrafts,
   onFinalizeReceipt,
   onFinalizeAllDrafts,
   onNavigateToGenerator,
   onArchiveReceipt,
+  onBulkArchiveReceipts,
   onArchiveAllHistory,
   onUnarchiveReceipt,
   onUnarchiveAll,
@@ -281,6 +285,104 @@ export default function ReceiptHistory({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Selected Receipt IDs for Bulk Actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // When switching tabs, clear selected items
+  const handleSelectTab = (tab: 'active' | 'drafts' | 'archived' | 'trash') => {
+    setActiveTab(tab);
+    setSelectedIds([]);
+  };
+
+  // Toggle selection for a single receipt
+  const handleToggleSelect = (id: string, e?: React.MouseEvent | React.ChangeEvent) => {
+    e?.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  // Current visible receipts based on active tab
+  const currentVisibleReceipts = activeTab === 'active'
+    ? sortedHistory
+    : activeTab === 'drafts'
+    ? sortedDraftHistory
+    : activeTab === 'archived'
+    ? filteredArchivedHistory
+    : filteredTrashHistory;
+
+  const allVisibleSelected =
+    currentVisibleReceipts.length > 0 &&
+    currentVisibleReceipts.every((item) => selectedIds.includes(item.id));
+  const someVisibleSelected =
+    currentVisibleReceipts.some((item) => selectedIds.includes(item.id));
+
+  // Toggle select all visible receipts in current tab
+  const handleToggleSelectAll = () => {
+    if (allVisibleSelected) {
+      const visibleIdSet = new Set(currentVisibleReceipts.map((i) => i.id));
+      setSelectedIds((prev) => prev.filter((id) => !visibleIdSet.has(id)));
+    } else {
+      const visibleIds = currentVisibleReceipts.map((i) => i.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  // Bulk Action 1: Arsipkan
+  const handleBulkArchive = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (onBulkArchiveReceipts) {
+      onBulkArchiveReceipts(selectedIds);
+    } else {
+      selectedIds.forEach((id) => onArchiveReceipt?.(id));
+    }
+    setSelectedIds([]);
+    setCsvExportSuccess(`Berhasil mengarsipkan ${count} struk ke tab Struk Yang Di Arsipkan!`);
+    setTimeout(() => setCsvExportSuccess(null), 3500);
+  };
+
+  // Bulk Action 2: Masukkan Sampah
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Pindahkan Struk ke Sampah?',
+      message: `Pindahkan ${count} struk terpilih ke Kotak Sampah? Anda masih dapat memulihkannya kembali dari tab Sampah kapan saja.`,
+      confirmLabel: 'Masukkan Sampah',
+      variant: 'rose',
+      onConfirm: () => {
+        if (onBulkDeleteReceipts) {
+          onBulkDeleteReceipts(selectedIds);
+        } else {
+          selectedIds.forEach((id) => onDeleteReceipt?.(id));
+        }
+        setSelectedIds([]);
+        setCsvExportSuccess(`${count} struk berhasil dipindahkan ke Kotak Sampah.`);
+        setTimeout(() => setCsvExportSuccess(null), 3500);
+      },
+    });
+  };
+
+  // Bulk Action 3: Ekspor CSV
+  const handleBulkExportCSV = () => {
+    if (selectedIds.length === 0) return;
+    const allKnown = [...history, ...(archivedHistory || []), ...(trashHistory || [])];
+    const targetReceipts = allKnown.filter((item) => selectedIds.includes(item.id));
+    if (targetReceipts.length === 0) return;
+
+    const success = exportReceiptsToCSV(targetReceipts, 'Strukku_Bulk_Pilihan');
+    if (success) {
+      setCsvExportSuccess(`Berhasil mengunduh ${targetReceipts.length} struk terpilih ke format CSV untuk Excel!`);
+      setTimeout(() => setCsvExportSuccess(null), 4000);
+    }
+  };
+
   const handleClearFilters = () => {
     setSearchTerm('');
     setMethodFilter('ALL');
@@ -406,7 +508,7 @@ export default function ReceiptHistory({
             {/* Tab 1: Semua Riwayat */}
             <button
               type="button"
-              onClick={() => setActiveTab('active')}
+              onClick={() => handleSelectTab('active')}
               className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
                 activeTab === 'active'
                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
@@ -426,7 +528,7 @@ export default function ReceiptHistory({
             {/* Tab 2: Draf */}
             <button
               type="button"
-              onClick={() => setActiveTab('drafts')}
+              onClick={() => handleSelectTab('drafts')}
               className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
                 activeTab === 'drafts'
                   ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
@@ -450,7 +552,7 @@ export default function ReceiptHistory({
             {/* Tab 3: Struk Yang Di Arsipkan */}
             <button
               type="button"
-              onClick={() => setActiveTab('archived')}
+              onClick={() => handleSelectTab('archived')}
               className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
                 activeTab === 'archived'
                   ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
@@ -477,7 +579,7 @@ export default function ReceiptHistory({
             {/* Tab 4: Sampah */}
             <button
               type="button"
-              onClick={() => setActiveTab('trash')}
+              onClick={() => handleSelectTab('trash')}
               className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
                 activeTab === 'trash'
                   ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
@@ -831,10 +933,49 @@ export default function ReceiptHistory({
               {/* Results Count, Quick Pinned Filter, Reset Filter Indicator & View Mode Toggle */}
               <div className="flex items-center justify-between gap-3 text-xs flex-wrap w-full">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* Select All Checkbox for Bulk Actions */}
+                  {filteredHistory.length > 0 && (
+                    <label
+                      className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer select-none shadow-2xs ${
+                        allVisibleSelected
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                          : someVisibleSelected
+                          ? 'bg-slate-100 text-slate-900 border-slate-300'
+                          : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                      }`}
+                      title={allVisibleSelected ? "Batalkan pilihan semua struk" : "Pilih semua struk yang tampil untuk bulk-action"}
+                      id="btn-select-all-ledger"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={handleToggleSelectAll}
+                        className="w-3.5 h-3.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900"
+                        id="bulk-select-all-checkbox"
+                      />
+                      <span>{allVisibleSelected ? 'Batalkan Semua' : 'Pilih Semua'}</span>
+                    </label>
+                  )}
+
+                  {selectedIds.length > 0 && (
+                    <span className="text-[11px] font-bold text-slate-900 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-900 animate-pulse"></span>
+                      <span>{selectedIds.length} dipilih</span>
+                      <button
+                        type="button"
+                        onClick={handleClearSelection}
+                        className="text-slate-400 hover:text-rose-600 transition cursor-pointer ml-0.5"
+                        title="Batalkan pilihan"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+
                   {draftCount > 0 && (
                     <button
                       type="button"
-                      onClick={() => setActiveTab('drafts')}
+                      onClick={() => handleSelectTab('drafts')}
                       className="text-[11px] font-bold px-2.5 py-1 rounded-lg transition flex items-center gap-1.5 cursor-pointer border bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-2xs"
                       title="Buka tab Draf untuk mengelola transaksi yang belum difinalisasi"
                     >
@@ -938,19 +1079,34 @@ export default function ReceiptHistory({
               <div className="divide-y divide-slate-100" id="history-items-list">
                 {sortedHistory.map((item) => {
                   const isPinned = Boolean(item.isPinned || item.isFavorite);
+                  const isSelected = selectedIds.includes(item.id);
 
                   return (
                     <div 
                       key={item.id} 
                       className={`p-4 transition flex flex-col md:flex-row justify-between md:items-center gap-3 ${
-                        isPinned 
+                        isSelected
+                          ? 'bg-slate-100/90 border-l-4 border-l-slate-900 ring-1 ring-slate-900/10'
+                          : isPinned 
                           ? 'bg-amber-50/40 hover:bg-amber-50/70 border-l-4 border-l-amber-400' 
                           : 'hover:bg-slate-50/70'
                       }`}
                     >
-                      {/* Store details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                      {/* Selection Checkbox & Store details */}
+                      <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                        <div className="shrink-0 pt-0.5 sm:pt-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelect(item.id, e)}
+                            className="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900"
+                            title={isSelected ? "Batal pilih struk ini" : "Pilih struk ini untuk bulk-action"}
+                            id={`checkbox-receipt-${item.id}`}
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                           {item.isDraft && (
                             <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
                               <Pencil className="w-3 h-3 text-amber-700" /> Draf Otomatis
@@ -1063,6 +1219,7 @@ export default function ReceiptHistory({
                           )}
                         </div>
                       </div>
+                    </div>
 
                       {/* Right side Amount and Actions */}
                       <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
@@ -1144,13 +1301,16 @@ export default function ReceiptHistory({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 p-4" id="history-items-grid">
                 {sortedHistory.map((item) => {
                   const isPinned = Boolean(item.isPinned || item.isFavorite);
+                  const isSelected = selectedIds.includes(item.id);
                   const totalQty = item.items.reduce((sum, i) => sum + i.quantity, 0);
 
                   return (
                     <div 
                       key={item.id} 
                       className={`bg-white rounded-xl border p-4 transition-all flex flex-col justify-between relative group shadow-2xs hover:shadow-xs ${
-                        isPinned 
+                        isSelected
+                          ? 'border-slate-900 bg-slate-50/90 ring-2 ring-slate-900/20'
+                          : isPinned 
                           ? 'border-amber-300 bg-gradient-to-b from-amber-50/40 to-white ring-1 ring-amber-300/60' 
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
@@ -1160,6 +1320,15 @@ export default function ReceiptHistory({
                         {/* Badges & Store Name */}
                         <div className="mb-2">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                            {/* Checkbox for bulk-action */}
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleToggleSelect(item.id, e)}
+                              className="w-4 h-4 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900 mr-0.5 shrink-0"
+                              title={isSelected ? "Batal pilih struk ini" : "Pilih struk ini untuk bulk-action"}
+                              id={`grid-checkbox-receipt-${item.id}`}
+                            />
                             {item.isDraft && (
                               <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
                                 <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
@@ -2635,6 +2804,87 @@ export default function ReceiptHistory({
             </div>
           )}
         </>
+      )}
+
+      {/* TOOLBAR BULK-ACTION (Muncul otomatis saat struk dipilih) */}
+      {selectedIds.length > 0 && (
+        <div 
+          className="fixed bottom-6 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/80 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-2xl shadow-slate-950/40 flex flex-wrap items-center justify-between sm:justify-center gap-3 transition-all"
+          id="bulk-action-toolbar"
+          role="toolbar"
+          aria-label="Bulk action toolbar"
+        >
+          {/* Status Counter */}
+          <div className="flex items-center gap-2.5 sm:pr-3 sm:border-r border-slate-700">
+            <span className="min-w-6 h-6 px-1.5 rounded-full bg-slate-800 border border-slate-600 text-xs font-mono font-bold flex items-center justify-center text-white">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-semibold text-slate-200 whitespace-nowrap">
+              {selectedIds.length} struk dipilih
+            </span>
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2 ml-1 cursor-pointer transition"
+              title="Batalkan pilihan struk"
+              id="btn-bulk-cancel-selection"
+            >
+              Batal
+            </button>
+          </div>
+
+          {/* Action Buttons: Arsipkan, Masukkan Sampah, Ekspor CSV */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Tombol Arsipkan (untuk tab active) */}
+            {activeTab === 'active' && (
+              <button
+                type="button"
+                onClick={handleBulkArchive}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                id="btn-bulk-archive"
+                title="Arsipkan semua struk yang dipilih ke tab Struk Yang Di Arsipkan"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                <span>Arsipkan</span>
+              </button>
+            )}
+
+            {/* Tombol Masukkan Sampah */}
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+              id="btn-bulk-trash"
+              title="Pindahkan semua struk yang dipilih ke Kotak Sampah"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Masukkan Sampah</span>
+            </button>
+
+            {/* Tombol Ekspor CSV */}
+            <button
+              type="button"
+              onClick={handleBulkExportCSV}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+              id="btn-bulk-export-csv"
+              title="Ekspor semua struk yang dipilih ke berkas CSV Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Ekspor CSV</span>
+            </button>
+
+            {/* Close / Dismiss */}
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer ml-1"
+              title="Tutup bilah tindakan massal"
+              id="btn-bulk-close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       {/* In-App Confirmation Modal (Bypasses iframe window.confirm limitations) */}

@@ -606,6 +606,41 @@ export default function App() {
     showToast(`🗑️ ${drafts.length} draf struk dipindahkan ke Sampah.`);
   };
 
+  // Bulk Archive receipts from active history
+  const handleBulkArchiveReceipts = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToArchive = history.filter((item) => idSet.has(item.id));
+    if (itemsToArchive.length === 0) return;
+    const now = new Date().toISOString();
+    const archivedItems: Receipt[] = itemsToArchive.map((item) => ({
+      ...item,
+      isArchived: true,
+      archivedAt: item.archivedAt || now,
+    }));
+
+    setHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setArchivedHistory((prev) => [...archivedItems, ...prev.filter((item) => !idSet.has(item.id))]);
+    showToast(`📦 ${itemsToArchive.length} struk berhasil diarsipkan!`);
+  };
+
+  // Bulk Delete receipts to trash
+  const handleBulkDeleteReceipts = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToDelete = history.filter((item) => idSet.has(item.id));
+    if (itemsToDelete.length === 0) return;
+    const now = new Date().toISOString();
+    const markedItems: Receipt[] = itemsToDelete.map((item) => ({
+      ...item,
+      deletedAt: item.deletedAt || now,
+    }));
+
+    setHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setTrashHistory((prev) => [...markedItems, ...prev.filter((item) => !idSet.has(item.id))]);
+    showToast(`🗑️ ${itemsToDelete.length} struk dipindahkan ke Sampah.`);
+  };
+
   // Clear entire history (moves all active receipts to Trash)
   const handleClearHistory = () => {
     if (history.length === 0) return;
@@ -1010,16 +1045,18 @@ export default function App() {
               onLoadReceipt={handleLoadReceipt}
               onUpdateReceipt={handleUpdateReceipt}
               onTogglePinReceipt={handleTogglePinReceipt}
-              onDeleteReceipt={handleDeleteReceipt}
               onClearHistory={handleClearHistory}
               onClearDrafts={handleClearDrafts}
               onFinalizeReceipt={handleFinalizeReceipt}
               onFinalizeAllDrafts={handleFinalizeAllDrafts}
               onNavigateToGenerator={() => setActiveView('generator')}
               onArchiveReceipt={handleArchiveReceipt}
+              onBulkArchiveReceipts={handleBulkArchiveReceipts}
               onArchiveAllHistory={handleArchiveAllHistory}
               onUnarchiveReceipt={handleUnarchiveReceipt}
               onUnarchiveAll={handleUnarchiveAll}
+              onDeleteReceipt={handleDeleteReceipt}
+              onBulkDeleteReceipts={handleBulkDeleteReceipts}
               onDeleteArchivedReceipt={handleDeleteArchivedReceipt}
               onClearArchivedHistory={handleClearArchivedHistory}
               onRestoreReceipt={handleRestoreReceipt}
