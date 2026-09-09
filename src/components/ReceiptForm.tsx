@@ -643,15 +643,15 @@ export default function ReceiptForm({
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full" id="receipt-form-panel">
+    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xs overflow-hidden flex flex-col h-full" id="receipt-form-panel">
       {/* Tab Navigation */}
-      <div className="flex border-b border-slate-100 bg-slate-50/70 p-2 gap-1 shrink-0 overflow-x-auto no-scrollbar">
+      <div className="flex border-b border-slate-200/70 bg-slate-50/80 p-2 gap-1 shrink-0 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('store')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'store'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-store-info"
         >
@@ -661,10 +661,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('items')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'items'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-items"
         >
@@ -681,10 +681,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('inventory')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'inventory'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-inventory"
         >
@@ -694,10 +694,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('payment')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'payment'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-payment"
         >
@@ -707,10 +707,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('calculator')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'calculator'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-calculator"
         >
@@ -720,10 +720,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('size')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'size'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-receipt-size"
         >
@@ -738,10 +738,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('fonts')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'fonts'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-receipt-fonts"
         >
@@ -754,10 +754,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('labels')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'labels'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-receipt-labels"
         >
@@ -774,10 +774,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('code')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'code'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-barcode-qr"
         >
@@ -786,10 +786,10 @@ export default function ReceiptForm({
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'templates'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
           id="tab-presets"
         >
@@ -3364,15 +3364,15 @@ export default function ReceiptForm({
       </div>
 
       {/* Footer Save Receipt Action */}
-      <div className="p-4 bg-slate-50 border-t border-slate-100 shrink-0 space-y-2.5">
+      <div className="p-4 bg-slate-50/90 backdrop-blur-xs border-t border-slate-200/80 shrink-0 space-y-2.5">
         {/* Autosave Status Row */}
         <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
-          <div className="flex items-center gap-1.5 font-medium text-emerald-700">
+          <div className="flex items-center gap-1.5 font-medium text-emerald-800">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>Autosave aktif • Tersimpan otomatis di perangkat</span>
           </div>
           {receipt.isDraft && (
-            <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="text-[10px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300/80 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Mode Draf Aktif
             </span>
           )}
@@ -3382,20 +3382,20 @@ export default function ReceiptForm({
           <button
             type="button"
             onClick={onNewReceipt}
-            className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition active:scale-98"
+            className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-2xs cursor-pointer transition active:scale-[0.98]"
             id="new-receipt-button"
             title="Mulai transaksi baru dengan ID unik otomatis dan nama toko default"
           >
-            <PlusCircle className="w-4 h-4" /> Transaksi Baru
+            <PlusCircle className="w-4 h-4 text-slate-600" /> Transaksi Baru
           </button>
           <button
             type="button"
             onClick={handleTriggerSave}
             disabled={receipt.items.length === 0}
-            className={`flex-1 py-3 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition active:scale-98 ${
+            className={`flex-1 py-3 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200/60 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm cursor-pointer transition active:scale-[0.98] ${
               receipt.isDraft
                 ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20'
-                : 'bg-slate-900 hover:bg-slate-950'
+                : 'bg-slate-950 hover:bg-black text-white'
             }`}
             id="save-receipt-button"
           >

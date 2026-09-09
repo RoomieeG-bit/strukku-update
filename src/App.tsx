@@ -820,39 +820,46 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 font-sans antialiased flex flex-col">
+    <div className="min-h-screen bg-slate-50/80 text-slate-900 font-sans antialiased flex flex-col selection:bg-slate-900 selection:text-white">
       
       {/* Visual Toast Notification Banner */}
       {toastMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-slate-900 text-white border border-slate-800 px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold animate-slideIn">
-          <CheckCircle className="w-4 h-4 text-white" />
-          <span>{toastMessage}</span>
+        <div className="fixed top-5 right-5 z-50 backdrop-blur-md bg-slate-950/95 text-white border border-slate-800/90 px-4 py-3 rounded-2xl shadow-2xl shadow-slate-950/20 flex items-center gap-2.5 text-xs font-semibold animate-slideIn">
+          <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <span className="tracking-tight text-slate-100">{toastMessage}</span>
         </div>
       )}
 
       {/* Main Navigation Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shrink-0 shadow-xs">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shrink-0 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo / Branding */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center text-white font-extrabold shadow-sm">
+            <div className="w-9 h-9 rounded-xl bg-slate-950 border border-slate-800 text-white flex items-center justify-center font-extrabold text-sm shadow-xs ring-1 ring-black/5">
               S
             </div>
             <div>
-              <span className="font-extrabold font-display text-base tracking-tight text-slate-900 flex items-center gap-1.5">
-                STRUKKU <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded">POS</span>
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium block leading-none">Generator Struk v2.5</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold font-display text-[15px] tracking-tight text-slate-950">
+                  STRUKKU
+                </span>
+                <span className="text-[9px] uppercase tracking-wider text-slate-600 font-bold bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded-md leading-none">
+                  POS PRO
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium block leading-none mt-0.5">Generator Struk Kasir</span>
             </div>
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="flex bg-slate-100 p-1 rounded-xl gap-0.5">
+          <nav className="flex bg-slate-100/90 border border-slate-200/60 p-1 rounded-xl gap-1">
             <button
               onClick={() => setActiveView('generator')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeView === 'generator'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-950 shadow-2xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
               id="nav-pos-generator"
@@ -896,9 +903,9 @@ export default function App() {
                 }
                 setActiveView('history');
               }}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative ${
                 activeView === 'history'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-950 shadow-2xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
               id="nav-ledger-history"
@@ -906,8 +913,8 @@ export default function App() {
               <History className="w-3.5 h-3.5" />
               <span>Riwayat Ledger</span>
               {history.length > 0 && (
-                <span className={`absolute -top-1 -right-1 text-white text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-extrabold shadow-2xs ${
-                  activeView === 'history' ? 'bg-amber-500' : 'bg-slate-900'
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold leading-none ${
+                  activeView === 'history' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-800'
                 }`}>
                   {history.length}
                 </span>
@@ -915,9 +922,9 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveView('dashboard')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeView === 'dashboard'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-950 shadow-2xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
               id="nav-sales-analytics"
@@ -927,9 +934,9 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveView('settings')}
-              className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
                 activeView === 'settings'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-950 shadow-2xs border border-slate-200/80'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
               }`}
               id="nav-app-settings"
@@ -942,16 +949,16 @@ export default function App() {
           {/* Header Utilities */}
           <div className="flex items-center gap-2">
             <div 
-              className="flex items-center gap-1.5 border border-emerald-200/80 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 shadow-2xs"
+              className="flex items-center gap-1.5 border border-emerald-500/25 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50/80 text-emerald-800 shadow-2xs"
               title="Autosave aktif. Draf struk tersimpan otomatis secara instan di perangkat Anda."
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
               <span className="text-[11px] font-medium hidden sm:inline">Autosave Aktif</span>
             </div>
 
-            <div className="hidden sm:flex items-center gap-1.5 border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50/50 text-slate-700">
-              <span>Mata Uang:</span>
-              <span className="text-slate-900 font-mono">{currencySymbol}</span>
+            <div className="hidden sm:flex items-center gap-1.5 border border-slate-200/80 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 shadow-2xs">
+              <span className="text-slate-400 text-[11px]">Mata Uang:</span>
+              <span className="text-slate-900 font-mono font-bold">{currencySymbol}</span>
             </div>
           </div>
         </div>

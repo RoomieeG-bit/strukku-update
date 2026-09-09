@@ -671,15 +671,15 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
   };
 
   return (
-    <div className="flex flex-col h-full gap-4" id="receipt-preview-panel">
+    <div className="flex flex-col h-full gap-3.5" id="receipt-preview-panel">
       {/* Control Actions Header */}
-      <div className="bg-slate-900 text-white p-3.5 sm:p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-slate-800 text-slate-300 rounded-lg">
-            <Printer className="w-4 h-4" />
+      <div className="bg-slate-950 text-white p-3 sm:p-3.5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 border border-slate-800/80 shadow-md shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-200 shadow-2xs">
+            <Printer className="w-4 h-4 text-slate-200" />
           </div>
           <div>
-            <h4 className="text-xs font-bold font-display uppercase tracking-wider text-slate-300">Pratinjau Struk</h4>
+            <h4 className="text-xs font-bold font-display uppercase tracking-wider text-slate-200">Pratinjau Struk</h4>
             <span className="text-[10px] text-slate-400 font-mono">Simulasi Kasir Fisik</span>
           </div>
         </div>
@@ -687,8 +687,8 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {/* Quick Paper Size Selector Dropdown */}
           {onUpdateReceipt && (
-            <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-slate-300">
-              <Maximize2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-700 transition">
+              <Maximize2 className="w-3 h-3 text-slate-400 shrink-0" />
               <select
                 value={receipt.paperSizePreset || (receipt.paperWidthMm && receipt.paperWidthMm !== 80 ? 'CUSTOM' : '80mm')}
                 onChange={(e) => {
@@ -707,7 +707,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                     });
                   }
                 }}
-                className="bg-transparent text-white font-medium text-[11px] outline-none cursor-pointer pr-1"
+                className="bg-transparent text-slate-200 font-medium text-[11px] outline-none cursor-pointer pr-1"
                 title="Pilih ukuran lebar kertas struk thermal / cetak"
                 id="quick-paper-size-selector"
               >
@@ -729,8 +729,8 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                 onClick={() => setShowCustomSizeModal(true)}
                 className={`p-0.5 rounded transition cursor-pointer ${
                   receipt.paperSizePreset === 'CUSTOM'
-                    ? 'text-amber-400 hover:bg-slate-700 font-bold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                    ? 'text-amber-400 hover:bg-slate-800 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                 }`}
                 title="Buka pengaturan kustom lebar struk"
                 id="open-custom-paper-width-btn"
@@ -742,12 +742,12 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
 
           {/* Quick Font Selector Dropdown */}
           {onUpdateReceipt && (
-            <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700/80 rounded-lg px-2 py-1 text-xs text-slate-300">
-              <Type className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-700 transition">
+              <Type className="w-3 h-3 text-slate-400 shrink-0" />
               <select
                 value={receipt.fontFamily || 'DEFAULT'}
                 onChange={(e) => onUpdateReceipt({ fontFamily: e.target.value as ReceiptFontFamily })}
-                className="bg-transparent text-white font-medium text-[11px] outline-none cursor-pointer pr-1"
+                className="bg-transparent text-slate-200 font-medium text-[11px] outline-none cursor-pointer pr-1"
                 title="Pilih jenis font struk"
                 id="quick-font-selector"
               >
@@ -774,18 +774,18 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             <button
               type="button"
               onClick={handlePrint}
-              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs border border-white/20"
               title={`Cetak ke Printer Thermal (${activePaperWidthMm}mm) / PDF`}
               id="print-action"
             >
-              <Printer className="w-3.5 h-3.5" /> Cetak ({activePaperWidthMm}mm)
+              <Printer className="w-3.5 h-3.5 text-slate-900" /> Cetak ({activePaperWidthMm}mm)
             </button>
 
             <button
               type="button"
               onClick={handleExportPDF}
               disabled={exporting !== null}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-2xs"
               id="export-pdf-action"
               title={`Unduh PDF ukuran pas (${activePaperWidthMm}mm)`}
             >
@@ -796,7 +796,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               type="button"
               onClick={handleExportJPG}
               disabled={exporting !== null}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-2xs"
               id="export-jpg-action"
               title="Unduh struk format JPG"
             >
@@ -807,7 +807,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               type="button"
               onClick={handleExportPNG}
               disabled={exporting !== null}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition active:scale-95 cursor-pointer shadow-2xs"
               id="export-png-action"
               title="Unduh struk format PNG latar transparan/putih"
             >
@@ -818,10 +818,10 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
       </div>
 
       {/* Main Preview Frame */}
-      <div className="flex-1 overflow-y-auto bg-slate-100 border border-slate-200/60 rounded-2xl p-4 sm:p-6 flex justify-center items-start min-h-[400px] relative">
+      <div className="flex-1 overflow-y-auto bg-studio-stage border border-slate-200/90 rounded-2xl p-4 sm:p-7 flex justify-center items-start min-h-[460px] relative shadow-inner">
         {exporting && (
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs flex flex-col justify-center items-center z-50 rounded-2xl text-white font-semibold text-xs gap-2">
-            <div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs flex flex-col justify-center items-center z-50 rounded-2xl text-white font-semibold text-xs gap-2">
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             Menyiapkan Ekspor {exporting}...
           </div>
         )}
