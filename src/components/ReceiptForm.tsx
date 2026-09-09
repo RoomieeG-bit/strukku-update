@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Receipt, Item, InventoryItem, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
 import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
@@ -62,6 +62,34 @@ import {
   Calculator,
   MapPin
 } from 'lucide-react';
+
+export type FormTabType = 'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'templates';
+
+export const FORM_TABS: { id: FormTabType; label: string }[] = [
+  { id: 'store', label: 'Toko & Detail' },
+  { id: 'items', label: 'Daftar Barang' },
+  { id: 'inventory', label: 'Barang Inventaris' },
+  { id: 'payment', label: 'Pembayaran & Pajak' },
+  { id: 'calculator', label: 'Kalkulator' },
+  { id: 'size', label: 'Ukuran Kertas' },
+  { id: 'fonts', label: 'Ubah Font' },
+  { id: 'labels', label: 'Ubah Label' },
+  { id: 'code', label: 'Barcode & QR' },
+  { id: 'templates', label: 'Preset' },
+];
+
+export const TAB_BUTTON_IDS: Record<FormTabType, string> = {
+  store: 'tab-store-info',
+  items: 'tab-items',
+  inventory: 'tab-inventory',
+  payment: 'tab-payment',
+  calculator: 'tab-calculator',
+  size: 'tab-receipt-size',
+  fonts: 'tab-receipt-fonts',
+  labels: 'tab-receipt-labels',
+  code: 'tab-barcode-qr',
+  templates: 'tab-presets',
+};
 
 interface ReceiptFormProps {
   receipt: Receipt;
@@ -203,7 +231,26 @@ export default function ReceiptForm({
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemDiscount, setNewItemDiscount] = useState(0);
-  const [activeTab, setActiveTab] = useState<'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'templates'>('store');
+  const [activeTab, setActiveTab] = useState<FormTabType>('store');
+  const [shortcutFeedback, setShortcutFeedback] = useState<string | null>(null);
+
+  // Helper to switch tab smoothly and scroll tab button into view
+  const handleSwitchTab = useCallback((newTab: FormTabType, sourceNotice?: string) => {
+    setActiveTab(newTab);
+    const targetConfig = FORM_TABS.find((t) => t.id === newTab);
+    const label = targetConfig ? targetConfig.label : newTab;
+    if (sourceNotice) {
+      setShortcutFeedback(`${sourceNotice}: ${label}`);
+      setTimeout(() => setShortcutFeedback(null), 1800);
+    }
+    setTimeout(() => {
+      const buttonId = TAB_BUTTON_IDS[newTab];
+      if (buttonId) {
+        document.getElementById(buttonId)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }, 40);
+  }, []);
+
   const [labelSubTab, setLabelSubTab] = useState<'CUSTOM' | 'STANDARD' | 'PRESETS'>('CUSTOM');
   const [newCustomLabel, setNewCustomLabel] = useState('');
   const [newCustomValue, setNewCustomValue] = useState('');
@@ -234,14 +281,95 @@ export default function ReceiptForm({
   const [showPaymentWarningModal, setShowPaymentWarningModal] = useState(false);
 
   // Trigger Save Receipt with underpayment confirmation check
-  const handleTriggerSave = () => {
+  const handleTriggerSave = useCallback(() => {
     if (receipt.items.length === 0) return;
     if (isPaymentInsufficient(receipt)) {
       setShowPaymentWarningModal(true);
       return;
     }
     onSaveReceipt();
-  };
+  }, [receipt, onSaveReceipt]);
+
+  // Keyboard Shortcuts for Cashier Workflow:
+  // - Ctrl+S: Save/Finalize Receipt
+  // - Ctrl+N: New Receipt Transaction
+  // - Home: Swipe to previous tab (or Ctrl+Home for first tab)
+  // - End: Swipe to next tab (or Ctrl+End for last tab)
+  // - PageUp / PageDown: Swipe tabs
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Ctrl + S (or Cmd + S): Save Receipt
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (receipt.items.length === 0) {
+          setShortcutFeedback('Peringatan: Tambahkan minimal 1 barang sebelum menyimpan.');
+          setTimeout(() => setShortcutFeedback(null), 2500);
+          return;
+        }
+        setShortcutFeedback('Menyimpan struk transaksi... (Ctrl+S)');
+        setTimeout(() => setShortcutFeedback(null), 1600);
+        handleTriggerSave();
+        return;
+      }
+
+      // 2. Ctrl + N (or Cmd + N): New Receipt Transaction
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setShortcutFeedback('Transaksi Baru dibuat (Ctrl+N)');
+        setTimeout(() => setShortcutFeedback(null), 1600);
+        onNewReceipt();
+        return;
+      }
+
+      // 3. Tab Swiping with Home, End, PageUp, PageDown
+      if (e.key === 'Home' || e.key === 'End' || e.key === 'PageUp' || e.key === 'PageDown') {
+        const target = e.target as HTMLElement;
+        const isEditingTextField = target && (
+          (target.tagName === 'INPUT' && !['button', 'submit', 'checkbox', 'radio'].includes((target as HTMLInputElement).type)) ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        );
+
+        // If typing inside an input/textarea, ignore plain Home/End so user can navigate text,
+        // UNLESS Alt or Ctrl is held down
+        if (isEditingTextField && !e.altKey && !e.ctrlKey) {
+          return;
+        }
+
+        e.preventDefault();
+
+        const tabIds: FormTabType[] = ['store', 'items', 'inventory', 'payment', 'calculator', 'size', 'fonts', 'labels', 'code', 'templates'];
+        const currentIndex = tabIds.indexOf(activeTab);
+
+        if (e.key === 'Home') {
+          if (e.ctrlKey) {
+            handleSwitchTab(tabIds[0], 'Tab Pertama (Ctrl+Home)');
+          } else {
+            const prevIndex = (currentIndex - 1 + tabIds.length) % tabIds.length;
+            handleSwitchTab(tabIds[prevIndex], 'Tab Sebelumnya (Home)');
+          }
+        } else if (e.key === 'End') {
+          if (e.ctrlKey) {
+            handleSwitchTab(tabIds[tabIds.length - 1], 'Tab Terakhir (Ctrl+End)');
+          } else {
+            const nextIndex = (currentIndex + 1) % tabIds.length;
+            handleSwitchTab(tabIds[nextIndex], 'Tab Berikutnya (End)');
+          }
+        } else if (e.key === 'PageUp') {
+          const prevIndex = (currentIndex - 1 + tabIds.length) % tabIds.length;
+          handleSwitchTab(tabIds[prevIndex], 'Tab Sebelumnya (PageUp)');
+        } else if (e.key === 'PageDown') {
+          const nextIndex = (currentIndex + 1) % tabIds.length;
+          handleSwitchTab(tabIds[nextIndex], 'Tab Berikutnya (PageDown)');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, receipt, onNewReceipt, handleTriggerSave, handleSwitchTab]);
 
   // Register custom fonts whenever customFonts list changes
   useEffect(() => {
@@ -643,11 +771,45 @@ export default function ReceiptForm({
   };
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xs overflow-hidden flex flex-col h-full" id="receipt-form-panel">
+    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-2xs overflow-hidden flex flex-col h-full relative" id="receipt-form-panel">
+      {/* Floating Keyboard Shortcut Notification Toast */}
+      {shortcutFeedback && (
+        <div 
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-950/95 backdrop-blur-md text-white border border-slate-700/80 text-xs font-semibold px-4 py-2 rounded-full shadow-2xl flex items-center gap-2 pointer-events-none transition-all"
+          role="status"
+          aria-live="polite"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-pulse" />
+          <span>{shortcutFeedback}</span>
+        </div>
+      )}
+
+      {/* Cashier Workflow & Shortcut Ribbon */}
+      <div className="bg-slate-100/90 border-b border-slate-200/80 px-3.5 py-1.5 flex items-center justify-between gap-2 text-xs select-none">
+        <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+          <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <span>Generator POS Kasir</span>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[10px] text-slate-600">
+          <span className="hidden sm:inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title="Tekan Home atau End untuk swipe tab formulir">
+            <kbd className="font-bold text-slate-900">Home</kbd> / <kbd className="font-bold text-slate-900">End</kbd>
+            <span className="text-slate-500 font-sans font-medium ml-0.5">Swipe Tab</span>
+          </span>
+          <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title="Tekan Ctrl+S untuk simpan transaksi ke riwayat ledger">
+            <kbd className="font-bold text-slate-900">Ctrl+S</kbd>
+            <span className="text-slate-500 font-sans font-medium ml-0.5">Simpan</span>
+          </span>
+          <span className="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title="Tekan Ctrl+N untuk mulai transaksi baru">
+            <kbd className="font-bold text-slate-900">Ctrl+N</kbd>
+            <span className="text-slate-500 font-sans font-medium ml-0.5">Baru</span>
+          </span>
+        </div>
+      </div>
+
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-200/70 bg-slate-50/80 p-2 gap-1 shrink-0 overflow-x-auto no-scrollbar">
         <button
-          onClick={() => setActiveTab('store')}
+          onClick={() => handleSwitchTab('store')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'store'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -660,7 +822,7 @@ export default function ReceiptForm({
           <span className="md:hidden">Toko</span>
         </button>
         <button
-          onClick={() => setActiveTab('items')}
+          onClick={() => handleSwitchTab('items')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'items'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -680,7 +842,7 @@ export default function ReceiptForm({
           )}
         </button>
         <button
-          onClick={() => setActiveTab('inventory')}
+          onClick={() => handleSwitchTab('inventory')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'inventory'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -693,7 +855,7 @@ export default function ReceiptForm({
           <span className="md:hidden">Inventaris</span>
         </button>
         <button
-          onClick={() => setActiveTab('payment')}
+          onClick={() => handleSwitchTab('payment')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'payment'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -706,7 +868,7 @@ export default function ReceiptForm({
           <span className="md:hidden">Bayar</span>
         </button>
         <button
-          onClick={() => setActiveTab('calculator')}
+          onClick={() => handleSwitchTab('calculator')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'calculator'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -719,7 +881,7 @@ export default function ReceiptForm({
           <span className="md:hidden">Hitung</span>
         </button>
         <button
-          onClick={() => setActiveTab('size')}
+          onClick={() => handleSwitchTab('size')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'size'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -737,7 +899,7 @@ export default function ReceiptForm({
           </span>
         </button>
         <button
-          onClick={() => setActiveTab('fonts')}
+          onClick={() => handleSwitchTab('fonts')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'fonts'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -753,7 +915,7 @@ export default function ReceiptForm({
           )}
         </button>
         <button
-          onClick={() => setActiveTab('labels')}
+          onClick={() => handleSwitchTab('labels')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'labels'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -773,7 +935,7 @@ export default function ReceiptForm({
           )}
         </button>
         <button
-          onClick={() => setActiveTab('code')}
+          onClick={() => handleSwitchTab('code')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'code'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -785,7 +947,7 @@ export default function ReceiptForm({
           <span>Barcode & QR</span>
         </button>
         <button
-          onClick={() => setActiveTab('templates')}
+          onClick={() => handleSwitchTab('templates')}
           className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'templates'
               ? 'bg-slate-950 text-white shadow-xs'
@@ -3384,9 +3546,11 @@ export default function ReceiptForm({
             onClick={onNewReceipt}
             className="px-4 py-3 bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-2xs cursor-pointer transition active:scale-[0.98]"
             id="new-receipt-button"
-            title="Mulai transaksi baru dengan ID unik otomatis dan nama toko default"
+            title="Mulai transaksi baru dengan ID unik otomatis (Pintasan: Ctrl+N)"
           >
-            <PlusCircle className="w-4 h-4 text-slate-600" /> Transaksi Baru
+            <PlusCircle className="w-4 h-4 text-slate-600 shrink-0" />
+            <span>Transaksi Baru</span>
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono font-bold bg-slate-100 text-slate-500 rounded border border-slate-200 ml-0.5">Ctrl+N</kbd>
           </button>
           <button
             type="button"
@@ -3398,9 +3562,11 @@ export default function ReceiptForm({
                 : 'bg-slate-950 hover:bg-black text-white'
             }`}
             id="save-receipt-button"
+            title="Simpan transaksi ke riwayat ledger (Pintasan: Ctrl+S)"
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-4 h-4 shrink-0" />
             <span>{receipt.isDraft ? 'Finalisasi & Simpan ke Riwayat' : 'Simpan Struk ke Riwayat'}</span>
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono font-bold bg-white/20 text-white rounded border border-white/30 ml-0.5">Ctrl+S</kbd>
           </button>
         </div>
       </div>

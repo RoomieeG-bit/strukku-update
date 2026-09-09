@@ -39,9 +39,20 @@ import {
   LayoutGrid,
   List,
   Pencil,
-  FileEdit
+  FileEdit,
+  ArrowUpDown
 } from 'lucide-react';
 import EditReceiptModal from './EditReceiptModal';
+
+export type HistorySortOption = 
+  | 'DATE_DESC' 
+  | 'DATE_ASC' 
+  | 'TOTAL_DESC' 
+  | 'TOTAL_ASC' 
+  | 'STORE_ASC' 
+  | 'STORE_DESC' 
+  | 'ITEMS_DESC' 
+  | 'ITEMS_ASC';
 
 interface ReceiptHistoryProps {
   history: Receipt[];
@@ -126,6 +137,7 @@ export default function ReceiptHistory({
   const [methodFilter, setMethodFilter] = useState<string>('ALL');
   const [archivedMethodFilter, setArchivedMethodFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState('');
+  const [sortBy, setSortBy] = useState<HistorySortOption>('DATE_DESC');
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
   const [csvExportSuccess, setCsvExportSuccess] = useState<string | null>(null);
@@ -138,6 +150,43 @@ export default function ReceiptHistory({
     variant: 'rose' | 'emerald' | 'slate' | 'amber';
     onConfirm: () => void;
   } | null>(null);
+
+  // Reusable multi-criteria sort helper: pinned receipts float to the top
+  const sortReceipts = (receiptList: Receipt[], sortOption: HistorySortOption) => {
+    return [...receiptList].sort((a, b) => {
+      const isAPinned = Boolean(a.isPinned || a.isFavorite);
+      const isBPinned = Boolean(b.isPinned || b.isFavorite);
+      if (isAPinned && !isBPinned) return -1;
+      if (!isAPinned && isBPinned) return 1;
+
+      switch (sortOption) {
+        case 'DATE_ASC':
+          return new Date(a.dateTime || 0).getTime() - new Date(b.dateTime || 0).getTime();
+        case 'DATE_DESC':
+          return new Date(b.dateTime || 0).getTime() - new Date(a.dateTime || 0).getTime();
+        case 'TOTAL_DESC':
+          return (b.total || 0) - (a.total || 0);
+        case 'TOTAL_ASC':
+          return (a.total || 0) - (b.total || 0);
+        case 'STORE_ASC':
+          return (a.storeName || '').localeCompare(b.storeName || '', undefined, { sensitivity: 'base' });
+        case 'STORE_DESC':
+          return (b.storeName || '').localeCompare(a.storeName || '', undefined, { sensitivity: 'base' });
+        case 'ITEMS_DESC': {
+          const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+          const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+          return qtyB - qtyA;
+        }
+        case 'ITEMS_ASC': {
+          const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+          const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+          return qtyA - qtyB;
+        }
+        default:
+          return new Date(b.dateTime || 0).getTime() - new Date(a.dateTime || 0).getTime();
+      }
+    });
+  };
 
   // Directly and reliably restore all receipts from trash back to active history
   const handleTriggerRestoreAll = () => {
@@ -185,14 +234,8 @@ export default function ReceiptHistory({
     return matchesSearch && matchesMethod && matchesDate;
   });
 
-  // Sort active history: pinned items float to the top
-  const sortedHistory = [...filteredHistory].sort((a, b) => {
-    const isAPinned = Boolean(a.isPinned || a.isFavorite);
-    const isBPinned = Boolean(b.isPinned || b.isFavorite);
-    if (isAPinned && !isBPinned) return -1;
-    if (!isAPinned && isBPinned) return 1;
-    return 0; // maintain original chronological order
-  });
+  // Sort active history with multi-criteria sort (pinned items stay on top)
+  const sortedHistory = sortReceipts(filteredHistory, sortBy);
 
   // Filter draft history
   const filteredDraftHistory = draftHistory.filter((item) => {
@@ -387,6 +430,7 @@ export default function ReceiptHistory({
     setSearchTerm('');
     setMethodFilter('ALL');
     setDateFilter('');
+    setSortBy('DATE_DESC');
   };
 
   // Export active transactions to CSV for Microsoft Excel
@@ -899,7 +943,7 @@ export default function ReceiptHistory({
 
             {/* Filters and Search Status Row */}
             <div className="flex flex-wrap items-center justify-between gap-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1 min-w-[260px]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1 min-w-[260px]">
                 <div>
                   <select
                     value={methodFilter}
@@ -908,7 +952,7 @@ export default function ReceiptHistory({
                     id="history-method-filter"
                   >
                     <option value="ALL">💳 Semua Metode & Status</option>
-                    <option value="PINNED">📌 Khusus Disematkan / Favorit ({pinnedCount})</option>
+                    <option value="PINNED">📌 Khusus Disematkan ({pinnedCount})</option>
                     <option value="CASH">💵 Tunai (CASH)</option>
                     <option value="QRIS">📱 QRIS / E-Wallet</option>
                     <option value="DEBIT">💳 Kartu Debit</option>
@@ -926,7 +970,29 @@ export default function ReceiptHistory({
                     onChange={(e) => setDateFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none cursor-pointer"
                     id="history-date-filter"
+                    title="Filter berdasarkan tanggal transaksi"
                   />
+                </div>
+
+                {/* Sort Option Selector */}
+                <div className="relative">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as HistorySortOption)}
+                    className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none font-medium cursor-pointer"
+                    id="history-sort-select"
+                    title="Urutkan struk transaksi"
+                  >
+                    <option value="DATE_DESC">⏱️ Tanggal Terbaru</option>
+                    <option value="DATE_ASC">📅 Tanggal Terlama</option>
+                    <option value="TOTAL_DESC">💰 Total Tertinggi</option>
+                    <option value="TOTAL_ASC">🏷️ Total Terendah</option>
+                    <option value="STORE_ASC">🏪 Toko (A - Z)</option>
+                    <option value="STORE_DESC">🏪 Toko (Z - A)</option>
+                    <option value="ITEMS_DESC">📦 Barang Terbanyak</option>
+                    <option value="ITEMS_ASC">📦 Barang Tersedikit</option>
+                  </select>
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
@@ -1003,14 +1069,14 @@ export default function ReceiptHistory({
                   <span className="text-slate-500 font-medium">
                     <span className="font-bold text-slate-900">{filteredHistory.length}</span> dari {finalizedCount} transaksi
                   </span>
-                  {(searchTerm || methodFilter !== 'ALL' || dateFilter) && (
+                  {(searchTerm || methodFilter !== 'ALL' || dateFilter || sortBy !== 'DATE_DESC') && (
                     <button
                       type="button"
                       onClick={handleClearFilters}
                       className="text-[11px] font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition flex items-center gap-1 cursor-pointer"
                       id="reset-all-filters-btn"
                     >
-                      <RefreshCw className="w-3 h-3" /> Reset Filter
+                      <RefreshCw className="w-3 h-3" /> Reset Filter & Sort
                     </button>
                   )}
                 </div>
