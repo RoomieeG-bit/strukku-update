@@ -27,7 +27,9 @@ import {
   RefreshCw,
   Store,
   Sparkles,
-  MapPin
+  MapPin,
+  User,
+  Phone
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -39,6 +41,10 @@ interface SettingsProps {
   onSetDefaultStoreName: (storeName: string, applyToCurrent?: boolean) => void;
   defaultStoreAddress?: string;
   onSetDefaultStoreAddress?: (storeAddress: string, applyToCurrent?: boolean) => void;
+  defaultCashierName?: string;
+  onSetDefaultCashierName?: (cashierName: string, applyToCurrent?: boolean) => void;
+  defaultStorePhone?: string;
+  onSetDefaultStorePhone?: (storePhone: string, applyToCurrent?: boolean) => void;
   onResetAllData: () => void;
   onRestoreBackup: (backupData: {
     history?: Receipt[];
@@ -47,6 +53,8 @@ interface SettingsProps {
     activeReceipt?: Receipt;
     defaultStoreName?: string;
     defaultStoreAddress?: string;
+    defaultCashierName?: string;
+    defaultStorePhone?: string;
   }) => void;
   showToast: (message: string) => void;
 }
@@ -60,14 +68,22 @@ export default function Settings({
   onSetDefaultStoreName,
   defaultStoreAddress,
   onSetDefaultStoreAddress,
+  defaultCashierName,
+  onSetDefaultCashierName,
+  defaultStorePhone,
+  onSetDefaultStorePhone,
   onResetAllData,
   onRestoreBackup,
   showToast,
 }: SettingsProps) {
   const [storeNameInput, setStoreNameInput] = useState(defaultStoreName);
   const [storeAddressInput, setStoreAddressInput] = useState(defaultStoreAddress || '');
+  const [cashierNameInput, setCashierNameInput] = useState(defaultCashierName || 'Andi Wijaya');
+  const [storePhoneInput, setStorePhoneInput] = useState(defaultStorePhone || '021-7401234');
   const [applyToCurrentReceipt, setApplyToCurrentReceipt] = useState(true);
   const [applyAddressToCurrentReceipt, setApplyAddressToCurrentReceipt] = useState(true);
+  const [applyCashierToCurrentReceipt, setApplyCashierToCurrentReceipt] = useState(true);
+  const [applyPhoneToCurrentReceipt, setApplyPhoneToCurrentReceipt] = useState(true);
 
   useEffect(() => {
     setStoreNameInput(defaultStoreName);
@@ -78,6 +94,18 @@ export default function Settings({
       setStoreAddressInput(defaultStoreAddress);
     }
   }, [defaultStoreAddress]);
+
+  useEffect(() => {
+    if (defaultCashierName) {
+      setCashierNameInput(defaultCashierName);
+    }
+  }, [defaultCashierName]);
+
+  useEffect(() => {
+    if (defaultStorePhone) {
+      setStorePhoneInput(defaultStorePhone);
+    }
+  }, [defaultStorePhone]);
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [resetConfirmInput, setResetConfirmInput] = useState('');
   const [copiedBackupJson, setCopiedBackupJson] = useState(false);
@@ -152,14 +180,20 @@ export default function Settings({
         defaultCurrency: currencySymbol,
         defaultStoreName: defaultStoreName,
         defaultStoreAddress: defaultStoreAddress,
+        defaultCashierName: defaultCashierName || 'Andi Wijaya',
+        defaultStorePhone: defaultStorePhone || '021-7401234',
       },
       settings: {
         currency: currencySymbol,
         defaultStoreName: defaultStoreName,
         defaultStoreAddress: defaultStoreAddress,
+        defaultCashierName: defaultCashierName || 'Andi Wijaya',
+        defaultStorePhone: defaultStorePhone || '021-7401234',
       },
       defaultStoreName: defaultStoreName,
       defaultStoreAddress: defaultStoreAddress,
+      defaultCashierName: defaultCashierName || 'Andi Wijaya',
+      defaultStorePhone: defaultStorePhone || '021-7401234',
       customPresets: customPresets,
       history: history,
       activeDraftReceipt: receipt,
@@ -224,6 +258,8 @@ export default function Settings({
         let importedActiveReceipt: Receipt | undefined;
         let importedDefaultStoreName: string | undefined;
         let importedDefaultStoreAddress: string | undefined;
+        let importedDefaultCashierName: string | undefined;
+        let importedDefaultStorePhone: string | undefined;
 
         if (Array.isArray(parsed)) {
           // Legacy array of receipts
@@ -245,12 +281,18 @@ export default function Settings({
           if (parsed.settings?.defaultStoreAddress || parsed.defaultStoreAddress) {
             importedDefaultStoreAddress = parsed.settings?.defaultStoreAddress || parsed.defaultStoreAddress;
           }
+          if (parsed.settings?.defaultCashierName || parsed.defaultCashierName) {
+            importedDefaultCashierName = parsed.settings?.defaultCashierName || parsed.defaultCashierName;
+          }
+          if (parsed.settings?.defaultStorePhone || parsed.defaultStorePhone) {
+            importedDefaultStorePhone = parsed.settings?.defaultStorePhone || parsed.defaultStorePhone;
+          }
           if (parsed.activeDraftReceipt && typeof parsed.activeDraftReceipt === 'object') {
             importedActiveReceipt = parsed.activeDraftReceipt;
           }
         }
 
-        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency && !importedDefaultStoreName && !importedDefaultStoreAddress) {
+        if (importedHistory.length === 0 && importedPresets.length === 0 && !importedCurrency && !importedDefaultStoreName && !importedDefaultStoreAddress && !importedDefaultCashierName && !importedDefaultStorePhone) {
           setImportFeedback({
             type: 'error',
             message: 'Format file JSON tidak valid atau tidak memiliki data transaksi/preset STRUKKU.',
@@ -266,6 +308,8 @@ export default function Settings({
           activeReceipt: importedActiveReceipt,
           defaultStoreName: importedDefaultStoreName,
           defaultStoreAddress: importedDefaultStoreAddress,
+          defaultCashierName: importedDefaultCashierName,
+          defaultStorePhone: importedDefaultStorePhone,
         });
 
         calculateStorageUsage();
@@ -427,6 +471,18 @@ export default function Settings({
               <li className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                 <span>Nama Toko Default (<strong>{defaultStoreName}</strong>)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Alamat Toko Default (<strong>{defaultStoreAddress || 'Belum diatur'}</strong>)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                <span>Nama Kasir Default (<strong>{defaultCashierName || 'Andi Wijaya'}</strong>)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>
+                <span>No. Telepon Default (<strong>{defaultStorePhone || '021-7401234'}</strong>)</span>
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-900"></span>
@@ -774,6 +830,274 @@ export default function Settings({
                     >
                       {sug}
                       {defaultStoreAddress === sug && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* NAMA KASIR DEFAULT */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4" id="section-default-cashier-name">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
+                  <User className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Nama Kasir Default
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 font-sans">
+                      Terus Dipakai
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Nama kasir utama yang otomatis dicantumkan pada bagian informasi struk baru.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="input-default-cashier-name">
+                  Nama Kasir yang Terus Dipakai:
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <User className="w-4 h-4 text-slate-400" />
+                    </span>
+                    <input
+                      type="text"
+                      id="input-default-cashier-name"
+                      value={cashierNameInput}
+                      onChange={(e) => setCashierNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const trimmed = cashierNameInput.trim();
+                          if (trimmed && onSetDefaultCashierName) {
+                            onSetDefaultCashierName(trimmed, applyCashierToCurrentReceipt);
+                            showToast(`Nama Kasir Default disimpan: "${trimmed}"`);
+                          }
+                        }
+                      }}
+                      placeholder="Contoh: Andi Wijaya"
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-white text-slate-900 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = cashierNameInput.trim();
+                      if (!trimmed) {
+                        showToast('Nama kasir default tidak boleh kosong.');
+                        return;
+                      }
+                      if (onSetDefaultCashierName) {
+                        onSetDefaultCashierName(trimmed, applyCashierToCurrentReceipt);
+                        showToast(`Nama Kasir Default berhasil disimpan: "${trimmed}"`);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 shrink-0"
+                    id="btn-save-default-cashier-name"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox: Terapkan juga ke struk aktif */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={applyCashierToCurrentReceipt}
+                  onChange={(e) => setApplyCashierToCurrentReceipt(e.target.checked)}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                <span>Terapkan juga langsung ke struk yang sedang dibuat saat ini</span>
+              </label>
+
+              {/* Status Note */}
+              <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-slate-900">
+                    Kasir Aktif: <span className="font-mono text-blue-800 bg-blue-100/70 px-1.5 py-0.5 rounded">{defaultCashierName || 'Andi Wijaya'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Setiap kali Anda menekan tombol <strong>Transaksi Baru</strong> atau memulai struk baru, nama kasir ini akan langsung digunakan secara konsisten.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Suggestion Presets */}
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Preset Cepat Nama Kasir:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Andi Wijaya',
+                    'Siti Nurhaliza',
+                    'Budi Santoso',
+                    'Rina Kusuma',
+                    'Kasir Utama',
+                    'Admin Toko'
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setCashierNameInput(sug);
+                        if (onSetDefaultCashierName) {
+                          onSetDefaultCashierName(sug, applyCashierToCurrentReceipt);
+                          showToast(`Nama Kasir Default diatur ke: "${sug}"`);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer border ${
+                        (defaultCashierName || 'Andi Wijaya') === sug
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {sug}
+                      {(defaultCashierName || 'Andi Wijaya') === sug && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* NO TELEPON DEFAULT */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4" id="section-default-store-phone">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-200">
+                  <Phone className="w-4 h-4 text-teal-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    No. Telepon Default
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200 font-sans">
+                      Terus Dipakai
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Nomor telepon atau hotline toko yang otomatis dicantumkan pada bagian header struk baru.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="input-default-store-phone">
+                  No. Telepon / Layanan Pelanggan:
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Phone className="w-4 h-4 text-slate-400" />
+                    </span>
+                    <input
+                      type="text"
+                      id="input-default-store-phone"
+                      value={storePhoneInput}
+                      onChange={(e) => setStorePhoneInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const trimmed = storePhoneInput.trim();
+                          if (trimmed && onSetDefaultStorePhone) {
+                            onSetDefaultStorePhone(trimmed, applyPhoneToCurrentReceipt);
+                            showToast(`No. Telepon Default disimpan: "${trimmed}"`);
+                          }
+                        }
+                      }}
+                      placeholder="Contoh: 021-7401234 atau 0812-3456-7890"
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-white text-slate-900 focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = storePhoneInput.trim();
+                      if (!trimmed) {
+                        showToast('No. telepon default tidak boleh kosong.');
+                        return;
+                      }
+                      if (onSetDefaultStorePhone) {
+                        onSetDefaultStorePhone(trimmed, applyPhoneToCurrentReceipt);
+                        showToast(`No. Telepon Default berhasil disimpan: "${trimmed}"`);
+                      }
+                    }}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 shrink-0"
+                    id="btn-save-default-store-phone"
+                  >
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Simpan</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Checkbox: Terapkan juga ke struk aktif */}
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={applyPhoneToCurrentReceipt}
+                  onChange={(e) => setApplyPhoneToCurrentReceipt(e.target.checked)}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 w-4 h-4 cursor-pointer"
+                />
+                <span>Terapkan juga langsung ke struk yang sedang dibuat saat ini</span>
+              </label>
+
+              {/* Status Note */}
+              <div className="p-3 bg-teal-50/70 border border-teal-200/80 rounded-xl text-xs text-teal-900 flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-slate-900">
+                    Telepon Aktif: <span className="font-mono text-teal-800 bg-teal-100/70 px-1.5 py-0.5 rounded">{defaultStorePhone || '021-7401234'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    Setiap kali Anda menekan tombol <strong>Transaksi Baru</strong> atau memulai struk baru, nomor telepon ini akan langsung digunakan secara konsisten.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Suggestion Presets */}
+              <div>
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Preset Cepat Format No. Telepon:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    '021-7401234',
+                    '0812-3456-7890',
+                    '0821-8888-9999',
+                    '0857-1234-5678',
+                    '022-4201234',
+                    '031-5671234'
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => {
+                        setStorePhoneInput(sug);
+                        if (onSetDefaultStorePhone) {
+                          onSetDefaultStorePhone(sug, applyPhoneToCurrentReceipt);
+                          showToast(`No. Telepon Default diatur ke: "${sug}"`);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer border ${
+                        (defaultStorePhone || '021-7401234') === sug
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {sug}
+                      {(defaultStorePhone || '021-7401234') === sug && ' ✓'}
                     </button>
                   ))}
                 </div>

@@ -80,6 +80,11 @@ interface ReceiptHistoryProps {
   onPermanentDeleteReceipt?: (id: string) => void;
   onEmptyTrash?: () => void;
   onImportHistory: (imported: Receipt[]) => void;
+  onBulkFinalizeDrafts?: (ids: string[]) => void;
+  onBulkUnarchiveReceipts?: (ids: string[]) => void;
+  onBulkDeleteArchivedReceipts?: (ids: string[]) => void;
+  onBulkRestoreTrash?: (ids: string[]) => void;
+  onBulkPermanentDeleteTrash?: (ids: string[]) => void;
   currencySymbol: string;
 }
 
@@ -109,6 +114,11 @@ export default function ReceiptHistory({
   onPermanentDeleteReceipt,
   onEmptyTrash,
   onImportHistory,
+  onBulkFinalizeDrafts,
+  onBulkUnarchiveReceipts,
+  onBulkDeleteArchivedReceipts,
+  onBulkRestoreTrash,
+  onBulkPermanentDeleteTrash,
   currencySymbol,
 }: ReceiptHistoryProps) {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
@@ -138,6 +148,9 @@ export default function ReceiptHistory({
   const [archivedMethodFilter, setArchivedMethodFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState('');
   const [sortBy, setSortBy] = useState<HistorySortOption>('DATE_DESC');
+  const [draftSortBy, setDraftSortBy] = useState<HistorySortOption>('DATE_DESC');
+  const [archivedSortBy, setArchivedSortBy] = useState<HistorySortOption>('DATE_DESC');
+  const [trashSortBy, setTrashSortBy] = useState<HistorySortOption>('DATE_DESC');
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState(false);
   const [csvExportSuccess, setCsvExportSuccess] = useState<string | null>(null);
@@ -253,11 +266,34 @@ export default function ReceiptHistory({
     );
   });
 
-  // Sort drafts: newest draft first
+  // Sort drafts according to draftSortBy
   const sortedDraftHistory = [...filteredDraftHistory].sort((a, b) => {
-    const timeA = new Date(a.draftSavedAt || a.dateTime || 0).getTime();
-    const timeB = new Date(b.draftSavedAt || b.dateTime || 0).getTime();
-    return timeB - timeA;
+    switch (draftSortBy) {
+      case 'DATE_ASC':
+        return new Date(a.draftSavedAt || a.dateTime || 0).getTime() - new Date(b.draftSavedAt || b.dateTime || 0).getTime();
+      case 'DATE_DESC':
+        return new Date(b.draftSavedAt || b.dateTime || 0).getTime() - new Date(a.draftSavedAt || a.dateTime || 0).getTime();
+      case 'TOTAL_DESC':
+        return (b.total || 0) - (a.total || 0);
+      case 'TOTAL_ASC':
+        return (a.total || 0) - (b.total || 0);
+      case 'STORE_ASC':
+        return (a.storeName || '').localeCompare(b.storeName || '', undefined, { sensitivity: 'base' });
+      case 'STORE_DESC':
+        return (b.storeName || '').localeCompare(a.storeName || '', undefined, { sensitivity: 'base' });
+      case 'ITEMS_DESC': {
+        const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        return qtyB - qtyA;
+      }
+      case 'ITEMS_ASC': {
+        const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        return qtyA - qtyB;
+      }
+      default:
+        return new Date(b.draftSavedAt || b.dateTime || 0).getTime() - new Date(a.draftSavedAt || a.dateTime || 0).getTime();
+    }
   });
 
   // Calculate stats on drafts list
@@ -283,6 +319,26 @@ export default function ReceiptHistory({
     );
   });
 
+  // Sort trash history
+  const sortedTrashHistory = [...filteredTrashHistory].sort((a, b) => {
+    switch (trashSortBy) {
+      case 'DATE_ASC':
+        return new Date(a.deletedAt || a.dateTime || 0).getTime() - new Date(b.deletedAt || b.dateTime || 0).getTime();
+      case 'DATE_DESC':
+        return new Date(b.deletedAt || b.dateTime || 0).getTime() - new Date(a.deletedAt || a.dateTime || 0).getTime();
+      case 'TOTAL_DESC':
+        return (b.total || 0) - (a.total || 0);
+      case 'TOTAL_ASC':
+        return (a.total || 0) - (b.total || 0);
+      case 'STORE_ASC':
+        return (a.storeName || '').localeCompare(b.storeName || '', undefined, { sensitivity: 'base' });
+      case 'STORE_DESC':
+        return (b.storeName || '').localeCompare(a.storeName || '', undefined, { sensitivity: 'base' });
+      default:
+        return new Date(b.deletedAt || b.dateTime || 0).getTime() - new Date(a.deletedAt || a.dateTime || 0).getTime();
+    }
+  });
+
   // Filter archived history list
   const filteredArchivedHistory = (archivedHistory || []).filter((item) => {
     const term = archivedSearchTerm.trim().toLowerCase();
@@ -302,6 +358,36 @@ export default function ReceiptHistory({
       (item.paymentStatus || 'SUDAH_LUNAS') === archivedMethodFilter;
 
     return matchesSearch && matchesMethod;
+  });
+
+  // Sort archived history
+  const sortedArchivedHistory = [...filteredArchivedHistory].sort((a, b) => {
+    switch (archivedSortBy) {
+      case 'DATE_ASC':
+        return new Date(a.archivedAt || a.dateTime || 0).getTime() - new Date(b.archivedAt || b.dateTime || 0).getTime();
+      case 'DATE_DESC':
+        return new Date(b.archivedAt || b.dateTime || 0).getTime() - new Date(a.archivedAt || a.dateTime || 0).getTime();
+      case 'TOTAL_DESC':
+        return (b.total || 0) - (a.total || 0);
+      case 'TOTAL_ASC':
+        return (a.total || 0) - (b.total || 0);
+      case 'STORE_ASC':
+        return (a.storeName || '').localeCompare(b.storeName || '', undefined, { sensitivity: 'base' });
+      case 'STORE_DESC':
+        return (b.storeName || '').localeCompare(a.storeName || '', undefined, { sensitivity: 'base' });
+      case 'ITEMS_DESC': {
+        const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        return qtyB - qtyA;
+      }
+      case 'ITEMS_ASC': {
+        const qtyA = (a.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        const qtyB = (b.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+        return qtyA - qtyB;
+      }
+      default:
+        return new Date(b.archivedAt || b.dateTime || 0).getTime() - new Date(a.archivedAt || a.dateTime || 0).getTime();
+    }
   });
 
   // Calculate stats on active list
@@ -351,8 +437,8 @@ export default function ReceiptHistory({
     : activeTab === 'drafts'
     ? sortedDraftHistory
     : activeTab === 'archived'
-    ? filteredArchivedHistory
-    : filteredTrashHistory;
+    ? sortedArchivedHistory
+    : sortedTrashHistory;
 
   const allVisibleSelected =
     currentVisibleReceipts.length > 0 &&
@@ -375,7 +461,7 @@ export default function ReceiptHistory({
     setSelectedIds([]);
   };
 
-  // Bulk Action 1: Arsipkan
+  // Bulk Action 1 (Active): Arsipkan
   const handleBulkArchive = () => {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
@@ -389,7 +475,7 @@ export default function ReceiptHistory({
     setTimeout(() => setCsvExportSuccess(null), 3500);
   };
 
-  // Bulk Action 2: Masukkan Sampah
+  // Bulk Action 2 (Active): Masukkan Sampah
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
@@ -412,14 +498,133 @@ export default function ReceiptHistory({
     });
   };
 
-  // Bulk Action 3: Ekspor CSV
+  // Bulk Action: Drafts -> Finalize Selected
+  const handleBulkFinalizeDraftsAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (onBulkFinalizeDrafts) {
+      onBulkFinalizeDrafts(selectedIds);
+    } else {
+      selectedIds.forEach((id) => onFinalizeReceipt?.(id));
+    }
+    setSelectedIds([]);
+    setCsvExportSuccess(`Berhasil memfinalisasi ${count} draf ke riwayat transaksi aktif!`);
+    setTimeout(() => setCsvExportSuccess(null), 3500);
+  };
+
+  // Bulk Action: Drafts -> Delete to Trash
+  const handleBulkDeleteDraftsAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Draf ke Sampah?',
+      message: `Pindahkan ${count} draf struk yang dipilih ke Kotak Sampah? Anda masih dapat memulihkannya jika diperlukan.`,
+      confirmLabel: 'Hapus ke Sampah',
+      variant: 'rose',
+      onConfirm: () => {
+        if (onBulkDeleteReceipts) {
+          onBulkDeleteReceipts(selectedIds);
+        } else {
+          selectedIds.forEach((id) => onDeleteReceipt?.(id));
+        }
+        setSelectedIds([]);
+        setCsvExportSuccess(`${count} draf berhasil dipindahkan ke Kotak Sampah.`);
+        setTimeout(() => setCsvExportSuccess(null), 3500);
+      },
+    });
+  };
+
+  // Bulk Action: Archived -> Unarchive to Active History
+  const handleBulkUnarchiveAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (onBulkUnarchiveReceipts) {
+      onBulkUnarchiveReceipts(selectedIds);
+    } else {
+      selectedIds.forEach((id) => onUnarchiveReceipt?.(id));
+    }
+    setSelectedIds([]);
+    setCsvExportSuccess(`Berhasil mengembalikan ${count} struk dari arsip ke riwayat aktif!`);
+    setTimeout(() => setCsvExportSuccess(null), 3500);
+  };
+
+  // Bulk Action: Archived -> Delete to Trash
+  const handleBulkDeleteArchivedAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Pindahkan Struk Arsip ke Sampah?',
+      message: `Pindahkan ${count} struk arsip yang dipilih ke Kotak Sampah? Anda masih dapat memulihkannya dari tab Sampah.`,
+      confirmLabel: 'Masukkan Sampah',
+      variant: 'rose',
+      onConfirm: () => {
+        if (onBulkDeleteArchivedReceipts) {
+          onBulkDeleteArchivedReceipts(selectedIds);
+        } else {
+          selectedIds.forEach((id) => onDeleteArchivedReceipt?.(id));
+        }
+        setSelectedIds([]);
+        setCsvExportSuccess(`${count} struk arsip berhasil dipindahkan ke Kotak Sampah.`);
+        setTimeout(() => setCsvExportSuccess(null), 3500);
+      },
+    });
+  };
+
+  // Bulk Action: Trash -> Restore to Active
+  const handleBulkRestoreTrashAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (onBulkRestoreTrash) {
+      onBulkRestoreTrash(selectedIds);
+    } else {
+      selectedIds.forEach((id) => onRestoreReceipt?.(id));
+    }
+    setSelectedIds([]);
+    setCsvExportSuccess(`Berhasil memulihkan ${count} struk dari sampah kembali ke riwayat aktif!`);
+    setTimeout(() => setCsvExportSuccess(null), 3500);
+  };
+
+  // Bulk Action: Trash -> Permanent Delete
+  const handleBulkPermanentDeleteAction = () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Permanen Struk Sampah?',
+      message: `PERINGATAN: ${count} struk yang dipilih akan dihapus selamanya dan TIDAK DAPAT dipulihkan lagi. Lanjutkan?`,
+      confirmLabel: 'Hapus Permanen',
+      variant: 'rose',
+      onConfirm: () => {
+        if (onBulkPermanentDeleteTrash) {
+          onBulkPermanentDeleteTrash(selectedIds);
+        } else {
+          selectedIds.forEach((id) => onPermanentDeleteReceipt?.(id));
+        }
+        setSelectedIds([]);
+        setCsvExportSuccess(`${count} struk berhasil dihapus secara permanen.`);
+        setTimeout(() => setCsvExportSuccess(null), 3500);
+      },
+    });
+  };
+
+  // Bulk Action: Ekspor CSV (Works across all tabs)
   const handleBulkExportCSV = () => {
     if (selectedIds.length === 0) return;
     const allKnown = [...history, ...(archivedHistory || []), ...(trashHistory || [])];
     const targetReceipts = allKnown.filter((item) => selectedIds.includes(item.id));
     if (targetReceipts.length === 0) return;
 
-    const success = exportReceiptsToCSV(targetReceipts, 'Strukku_Bulk_Pilihan');
+    const prefix = activeTab === 'drafts' 
+      ? 'Strukku_Draf_Pilihan' 
+      : activeTab === 'archived'
+      ? 'Strukku_Arsip_Pilihan'
+      : activeTab === 'trash'
+      ? 'Strukku_Sampah_Pilihan'
+      : 'Strukku_Bulk_Pilihan';
+
+    const success = exportReceiptsToCSV(targetReceipts, prefix);
     if (success) {
       setCsvExportSuccess(`Berhasil mengunduh ${targetReceipts.length} struk terpilih ke format CSV untuk Excel!`);
       setTimeout(() => setCsvExportSuccess(null), 4000);
@@ -1669,7 +1874,28 @@ export default function ReceiptHistory({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  {/* Sort Selector for Drafts */}
+                  <div className="relative">
+                    <select
+                      value={draftSortBy}
+                      onChange={(e) => setDraftSortBy(e.target.value as HistorySortOption)}
+                      className="pl-8 pr-3 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none cursor-pointer transition shadow-2xs"
+                      title="Urutkan struk draf"
+                      id="draft-sort-select"
+                    >
+                      <option value="DATE_DESC">⏱️ Draf Terbaru</option>
+                      <option value="DATE_ASC">📅 Draf Terlama</option>
+                      <option value="TOTAL_DESC">💰 Total Tertinggi</option>
+                      <option value="TOTAL_ASC">🏷️ Total Terendah</option>
+                      <option value="STORE_ASC">🏪 Toko (A - Z)</option>
+                      <option value="STORE_DESC">🏪 Toko (Z - A)</option>
+                      <option value="ITEMS_DESC">📦 Barang Terbanyak</option>
+                      <option value="ITEMS_ASC">📦 Barang Tersedikit</option>
+                    </select>
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+
                   {/* View Mode Toggle */}
                   <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-2xs">
                     <button
@@ -1708,6 +1934,53 @@ export default function ReceiptHistory({
                       Reset
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-bar: Select All for Drafts & Stats */}
+            {draftHistory.length > 0 && filteredDraftHistory.length > 0 && (
+              <div className="flex items-center justify-between gap-3 text-xs flex-wrap pt-1 border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label
+                    className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer select-none shadow-2xs ${
+                      allVisibleSelected
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : someVisibleSelected
+                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                    }`}
+                    title={allVisibleSelected ? "Batalkan pilihan semua draf" : "Pilih semua draf yang tampil untuk tindakan massal"}
+                    id="btn-select-all-drafts"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={handleToggleSelectAll}
+                      className="w-3.5 h-3.5 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                      id="bulk-select-all-drafts-checkbox"
+                    />
+                    <span>{allVisibleSelected ? 'Batalkan Semua' : 'Pilih Semua'}</span>
+                  </label>
+
+                  {selectedIds.length > 0 && (
+                    <span className="text-[11px] font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      <span>{selectedIds.length} draf dipilih</span>
+                      <button
+                        type="button"
+                        onClick={handleClearSelection}
+                        className="text-amber-700 hover:text-rose-600 transition cursor-pointer ml-0.5"
+                        title="Batalkan pilihan"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-slate-500 text-xs">
+                  <span className="font-bold text-slate-900">{filteredDraftHistory.length}</span> dari {draftHistory.length} draf tersimpan
                 </div>
               </div>
             )}
@@ -1757,64 +2030,83 @@ export default function ReceiptHistory({
                   const itemCount = item.items.reduce((acc, i) => acc + i.quantity, 0);
                   const isCopied = copiedId === item.transactionId;
                   const draftTime = item.draftSavedAt || item.dateTime;
+                  const isSelected = selectedIds.includes(item.id);
 
                   return (
                     <div
                       key={item.id}
-                      className="p-4 hover:bg-amber-50/40 transition flex flex-col md:flex-row md:items-center justify-between gap-4 group bg-amber-50/15"
+                      className={`p-4 transition flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
+                        isSelected
+                          ? 'bg-amber-100/70 border-l-4 border-l-amber-600 ring-1 ring-amber-600/20'
+                          : 'bg-amber-50/15 hover:bg-amber-50/40'
+                      }`}
                     >
-                      <div className="space-y-1.5 flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                            <Pencil className="w-3 h-3 text-amber-700" /> Draf
-                          </span>
-
-                          <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                            <Store className="w-4 h-4 text-slate-400 shrink-0" />
-                            <span className="truncate max-w-[200px] sm:max-w-xs">{item.storeName}</span>
-                          </span>
-
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                            {item.paymentMethod}
-                          </span>
+                      {/* Checkbox & Details */}
+                      <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                        <div className="shrink-0 pt-0.5 sm:pt-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelect(item.id, e)}
+                            className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                            title={isSelected ? "Batal pilih draf ini" : "Pilih draf ini untuk tindakan massal"}
+                            id={`checkbox-draft-${item.id}`}
+                          />
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500">
-                          <button
-                            type="button"
-                            onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
-                            className="flex items-center gap-1 font-mono text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded transition cursor-pointer text-[11px]"
-                            title="Klik untuk salin ID Transaksi"
-                          >
-                            <span>#{item.transactionId}</span>
-                            {isCopied ? (
-                              <Check className="w-3 h-3 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3 h-3 text-slate-400" />
-                            )}
-                          </button>
-
-                          <span className="flex items-center gap-1 text-[11px] text-amber-800">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Tersimpan: {formatDateTime(draftTime)}</span>
-                          </span>
-
-                          {item.customerName && (
-                            <span className="flex items-center gap-1">
-                              <User className="w-3 h-3 text-slate-400" />
-                              <span className="truncate max-w-[120px]">{item.customerName}</span>
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                              <Pencil className="w-3 h-3 text-amber-700" /> Draf
                             </span>
-                          )}
 
-                          <span className="flex items-center gap-1">
-                            <ShoppingBag className="w-3 h-3 text-slate-400" />
-                            <span>{item.items.length} item ({itemCount} pcs)</span>
-                          </span>
-                        </div>
+                            <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                              <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[200px] sm:max-w-xs">{item.storeName}</span>
+                            </span>
 
-                        {/* Items preview snippet */}
-                        <div className="text-[11px] text-slate-500 line-clamp-1 italic">
-                          Item: {item.items.map(i => `${i.name} (${i.quantity}x)`).join(', ')}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                              {item.paymentMethod}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-500">
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyTransactionId(e, item.transactionId)}
+                              className="flex items-center gap-1 font-mono text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded transition cursor-pointer text-[11px]"
+                              title="Klik untuk salin ID Transaksi"
+                            >
+                              <span>#{item.transactionId}</span>
+                              {isCopied ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3 text-slate-400" />
+                              )}
+                            </button>
+
+                            <span className="flex items-center gap-1 text-[11px] text-amber-800">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              <span>Tersimpan: {formatDateTime(draftTime)}</span>
+                            </span>
+
+                            {item.customerName && (
+                              <span className="flex items-center gap-1">
+                                <User className="w-3 h-3 text-slate-400" />
+                                <span className="truncate max-w-[120px]">{item.customerName}</span>
+                              </span>
+                            )}
+
+                            <span className="flex items-center gap-1">
+                              <ShoppingBag className="w-3 h-3 text-slate-400" />
+                              <span>{item.items.length} item ({itemCount} pcs)</span>
+                            </span>
+                          </div>
+
+                          {/* Items preview snippet */}
+                          <div className="text-[11px] text-slate-500 line-clamp-1 italic">
+                            Item: {item.items.map(i => `${i.name} (${i.quantity}x)`).join(', ')}
+                          </div>
                         </div>
                       </div>
 
@@ -1887,21 +2179,39 @@ export default function ReceiptHistory({
                   const itemCount = item.items.reduce((acc, i) => acc + i.quantity, 0);
                   const isCopied = copiedId === item.transactionId;
                   const draftTime = item.draftSavedAt || item.dateTime;
+                  const isSelected = selectedIds.includes(item.id);
 
                   return (
                     <div
                       key={item.id}
-                      className="bg-amber-50/20 border border-amber-200/80 hover:border-amber-300 rounded-xl p-3.5 transition flex flex-col justify-between shadow-2xs hover:shadow-xs group"
+                      className={`rounded-xl p-3.5 transition flex flex-col justify-between shadow-2xs hover:shadow-xs group border ${
+                        isSelected
+                          ? 'bg-amber-100/70 border-amber-500 ring-2 ring-amber-500/20'
+                          : 'bg-amber-50/20 border-amber-200/80 hover:border-amber-300'
+                      }`}
                     >
                       <div>
-                        {/* Badges */}
-                        <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
-                            <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
-                          </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                            {item.paymentMethod}
-                          </span>
+                        {/* Header Badges & Checkbox */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs">
+                              <Pencil className="w-2.5 h-2.5 text-amber-700" /> Draf
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {item.paymentMethod}
+                            </span>
+                          </div>
+
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleToggleSelect(item.id, e)}
+                              className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                              title={isSelected ? "Batal pilih draf" : "Pilih draf"}
+                              id={`checkbox-draft-grid-${item.id}`}
+                            />
+                          </div>
                         </div>
 
                         {/* Store & ID */}
@@ -2169,6 +2479,27 @@ export default function ReceiptHistory({
                     </button>
                   </div>
 
+                  {/* Sort Selector for Archived */}
+                  <div className="relative">
+                    <select
+                      value={archivedSortBy}
+                      onChange={(e) => setArchivedSortBy(e.target.value as HistorySortOption)}
+                      className="pl-8 pr-3 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none cursor-pointer transition shadow-2xs"
+                      title="Urutkan struk arsip"
+                      id="archived-sort-select"
+                    >
+                      <option value="DATE_DESC">⏱️ Arsip Terbaru</option>
+                      <option value="DATE_ASC">📅 Arsip Terlama</option>
+                      <option value="TOTAL_DESC">💰 Total Tertinggi</option>
+                      <option value="TOTAL_ASC">🏷️ Total Terendah</option>
+                      <option value="STORE_ASC">🏪 Toko (A - Z)</option>
+                      <option value="STORE_DESC">🏪 Toko (Z - A)</option>
+                      <option value="ITEMS_DESC">📦 Barang Terbanyak</option>
+                      <option value="ITEMS_ASC">📦 Barang Tersedikit</option>
+                    </select>
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+
                   <select
                     value={archivedMethodFilter}
                     onChange={(e) => setArchivedMethodFilter(e.target.value)}
@@ -2198,6 +2529,53 @@ export default function ReceiptHistory({
                       Reset
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-bar: Select All for Archived & Stats */}
+            {archivedHistory.length > 0 && filteredArchivedHistory.length > 0 && (
+              <div className="flex items-center justify-between gap-3 text-xs flex-wrap pt-1 border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label
+                    className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer select-none shadow-2xs ${
+                      allVisibleSelected
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : someVisibleSelected
+                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                    }`}
+                    title={allVisibleSelected ? "Batalkan pilihan semua arsip" : "Pilih semua arsip yang tampil untuk tindakan massal"}
+                    id="btn-select-all-archived"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={handleToggleSelectAll}
+                      className="w-3.5 h-3.5 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                      id="bulk-select-all-archived-checkbox"
+                    />
+                    <span>{allVisibleSelected ? 'Batalkan Semua' : 'Pilih Semua'}</span>
+                  </label>
+
+                  {selectedIds.length > 0 && (
+                    <span className="text-[11px] font-bold text-amber-950 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      <span>{selectedIds.length} arsip dipilih</span>
+                      <button
+                        type="button"
+                        onClick={handleClearSelection}
+                        className="text-amber-700 hover:text-rose-600 transition cursor-pointer ml-0.5"
+                        title="Batalkan pilihan"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-slate-500 text-xs">
+                  <span className="font-bold text-slate-900">{filteredArchivedHistory.length}</span> dari {archivedHistory.length} struk arsip
                 </div>
               </div>
             )}
@@ -2244,43 +2622,63 @@ export default function ReceiptHistory({
               </div>
             ) : viewMode === 'list' ? (
               <div className="divide-y divide-slate-100">
-                {filteredArchivedHistory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-4 hover:bg-amber-50/20 transition flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-                  >
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                          <Store className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-[200px] sm:max-w-xs">{item.storeName}</span>
-                        </span>
+                {sortedArchivedHistory.map((item) => {
+                  const isSelected = selectedIds.includes(item.id);
 
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
-                          <Archive className="w-3 h-3" />
-                          <span>Diarsipkan</span>
-                          {item.archivedAt && (
-                            <span className="opacity-75 font-normal">
-                              • {formatDateTime(item.archivedAt).split(' ')[0]}
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-4 transition flex flex-col md:flex-row md:items-center justify-between gap-4 group ${
+                        isSelected
+                          ? 'bg-amber-100/70 border-l-4 border-l-amber-600 ring-1 ring-amber-600/20'
+                          : 'hover:bg-amber-50/20 bg-white'
+                      }`}
+                    >
+                      {/* Selection Checkbox & Details */}
+                      <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                        <div className="shrink-0 pt-0.5 sm:pt-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelect(item.id, e)}
+                            className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                            title={isSelected ? "Batal pilih arsip ini" : "Pilih arsip ini untuk tindakan massal"}
+                            id={`checkbox-archived-${item.id}`}
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                              <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[200px] sm:max-w-xs">{item.storeName}</span>
                             </span>
-                          )}
-                        </span>
 
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
-                          {item.paymentMethod}
-                        </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                              <Archive className="w-3 h-3" />
+                              <span>Diarsipkan</span>
+                              {item.archivedAt && (
+                                <span className="opacity-75 font-normal">
+                                  • {formatDateTime(item.archivedAt).split(' ')[0]}
+                                </span>
+                              )}
+                            </span>
 
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : (item.paymentStatus || 'SUDAH_LUNAS') === 'HUTANG'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
-                          {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
-                           (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
-                        </span>
-                      </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                              {item.paymentMethod}
+                            </span>
+
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'HUTANG'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}>
+                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                               (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
+                            </span>
+                          </div>
 
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                         <div className="flex items-center gap-1">
@@ -2348,99 +2746,120 @@ export default function ReceiptHistory({
                         )}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Right side Amount and Actions */}
-                    <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
-                      <div className="text-right">
-                        <span className="text-xs text-slate-400 block">Total Belanja</span>
-                        <span className="text-sm font-mono font-bold text-slate-900 block">
-                          {formatCurrency(item.total, currencySymbol)}
-                        </span>
-                      </div>
+                  {/* Right side Amount and Actions */}
+                  <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400 block">Total Belanja</span>
+                      <span className="text-sm font-mono font-bold text-slate-900 block">
+                        {formatCurrency(item.total, currencySymbol)}
+                      </span>
+                    </div>
 
-                      <div className="flex items-center gap-1.5">
-                        {/* Keluarkan dari Arsip Button */}
-                        <button
-                          type="button"
-                          onClick={() => onUnarchiveReceipt?.(item.id)}
-                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
-                          title="Keluarkan struk dari arsip dan kembalikan ke Semua Riwayat"
-                        >
-                          <ArchiveRestore className="w-3.5 h-3.5" />
-                          <span>Keluarkan dari Arsip</span>
-                        </button>
+                    <div className="flex items-center gap-1.5">
+                      {/* Keluarkan dari Arsip Button */}
+                      <button
+                        type="button"
+                        onClick={() => onUnarchiveReceipt?.(item.id)}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs active:scale-95"
+                        title="Keluarkan struk dari arsip dan kembalikan ke Semua Riwayat"
+                      >
+                        <ArchiveRestore className="w-3.5 h-3.5" />
+                        <span>Keluarkan dari Arsip</span>
+                      </button>
 
-                        {/* Edit Struk Arsip Button */}
-                        <button
-                          type="button"
-                          onClick={() => setEditingReceipt(item)}
-                          className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
-                          title="Edit struk arsip ini"
-                          id={`btn-edit-archived-receipt-${item.id}`}
-                        >
-                          <Pencil className="w-3.5 h-3.5 text-blue-600" />
-                          <span className="hidden sm:inline">Edit</span>
-                        </button>
+                      {/* Edit Struk Arsip Button */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingReceipt(item)}
+                        className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                        title="Edit struk arsip ini"
+                        id={`btn-edit-archived-receipt-${item.id}`}
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="hidden sm:inline">Edit</span>
+                      </button>
 
-                        {/* Muat ke Generator Button */}
-                        <button
-                          type="button"
-                          onClick={() => onLoadReceipt(item)}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
-                          title="Muat kembali ke generator POS"
-                        >
-                          <ArrowUpRight className="w-3.5 h-3.5" /> Muat
-                        </button>
+                      {/* Muat ke Generator Button */}
+                      <button
+                        type="button"
+                        onClick={() => onLoadReceipt(item)}
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-900 text-slate-700 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        title="Muat kembali ke generator POS"
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5" /> Muat
+                      </button>
 
-                        {/* Pindahkan ke Sampah Button */}
-                        <button
-                          type="button"
-                          onClick={() => onDeleteArchivedReceipt?.(item.id)}
-                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
-                          title="Pindahkan struk arsip ke Sampah"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {/* Pindahkan ke Sampah Button */}
+                      <button
+                        type="button"
+                        onClick={() => onDeleteArchivedReceipt?.(item.id)}
+                        className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition cursor-pointer"
+                        title="Pindahkan struk arsip ke Sampah"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 p-4" id="archived-items-grid">
-                {filteredArchivedHistory.map((item) => {
-                  const totalQty = item.items.reduce((sum, i) => sum + i.quantity, 0);
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 p-4" id="archived-items-grid">
+            {sortedArchivedHistory.map((item) => {
+              const totalQty = item.items.reduce((sum, i) => sum + i.quantity, 0);
+              const isSelected = selectedIds.includes(item.id);
 
-                  return (
-                    <div 
-                      key={item.id} 
-                      className="bg-white rounded-xl border border-amber-200/80 p-4 transition-all flex flex-col justify-between relative group shadow-2xs hover:shadow-xs hover:border-amber-300"
-                    >
-                      <div>
-                        {/* Header badges */}
-                        <div className="mb-2">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
-                              <Archive className="w-2.5 h-2.5" /> Arsip
-                            </span>
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                              {item.paymentMethod}
-                            </span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
-                                ? 'bg-rose-50 text-rose-700 border border-rose-100'
-                                : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
-                            }`}>
-                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
-                               (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
-                            </span>
-                          </div>
-                          <h4 className="font-bold text-slate-900 text-sm truncate font-display" title={item.storeName}>
-                            {item.storeName}
-                          </h4>
+              return (
+                <div 
+                  key={item.id} 
+                  className={`rounded-xl p-4 transition-all flex flex-col justify-between relative group shadow-2xs hover:shadow-xs border ${
+                    isSelected
+                      ? 'bg-amber-100/70 border-amber-500 ring-2 ring-amber-500/20'
+                      : 'bg-white border-amber-200/80 hover:border-amber-300'
+                  }`}
+                >
+                  <div>
+                    {/* Header Checkbox & Badges */}
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                            <Archive className="w-2.5 h-2.5" /> Arsip
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                            {item.paymentMethod}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                              : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
+                          }`}>
+                            {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                             (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
+                          </span>
                         </div>
+
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelect(item.id, e)}
+                            className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                            title={isSelected ? "Batal pilih arsip" : "Pilih arsip"}
+                            id={`checkbox-archived-grid-${item.id}`}
+                          />
+                        </div>
+                      </div>
+
+                      <h4 className="font-bold text-slate-900 text-sm truncate font-display" title={item.storeName}>
+                        {item.storeName}
+                      </h4>
+                    </div>
 
                         {/* Meta Box */}
                         <div className="space-y-1.5 text-xs text-slate-500 mb-3 bg-amber-50/40 p-2.5 rounded-lg border border-amber-100/60">
@@ -2629,31 +3048,114 @@ export default function ReceiptHistory({
               )}
             </div>
 
-            {/* Trash Search Input */}
+            {/* Trash Search & Sort Bar */}
             {trashHistory.length > 0 && (
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Search className="w-4 h-4" />
-                </span>
-                <input
-                  type="text"
-                  placeholder="Cari struk di sampah berdasarkan ID Transaksi, Toko, Pelanggan, Kasir, atau Item..."
-                  value={trashSearchTerm}
-                  onChange={(e) => setTrashSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-9 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 focus:bg-white rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition shadow-2xs"
-                  id="trash-search-input"
-                  autoComplete="off"
-                />
-                {trashSearchTerm && (
-                  <button
-                    type="button"
-                    onClick={() => setTrashSearchTerm('')}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
-                    title="Hapus kata pencarian"
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Search className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Cari struk di sampah berdasarkan ID Transaksi, Toko, Pelanggan, Kasir, atau Item..."
+                    value={trashSearchTerm}
+                    onChange={(e) => setTrashSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 focus:bg-white rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition shadow-2xs"
+                    id="trash-search-input"
+                    autoComplete="off"
+                  />
+                  {trashSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setTrashSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 cursor-pointer"
+                      title="Hapus kata pencarian"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Sort Selector for Trash */}
+                  <div className="relative">
+                    <select
+                      value={trashSortBy}
+                      onChange={(e) => setTrashSortBy(e.target.value as HistorySortOption)}
+                      className="pl-8 pr-3 py-2 bg-slate-50/70 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none cursor-pointer transition shadow-2xs"
+                      title="Urutkan struk di sampah"
+                      id="trash-sort-select"
+                    >
+                      <option value="DATE_DESC">⏱️ Sampah Terbaru</option>
+                      <option value="DATE_ASC">📅 Sampah Terlama</option>
+                      <option value="TOTAL_DESC">💰 Total Tertinggi</option>
+                      <option value="TOTAL_ASC">🏷️ Total Terendah</option>
+                      <option value="STORE_ASC">🏪 Toko (A - Z)</option>
+                      <option value="STORE_DESC">🏪 Toko (Z - A)</option>
+                      <option value="ITEMS_DESC">📦 Barang Terbanyak</option>
+                      <option value="ITEMS_ASC">📦 Barang Tersedikit</option>
+                    </select>
+                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+
+                  {trashSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setTrashSearchTerm('')}
+                      className="px-2.5 py-2 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer font-medium"
+                      title="Reset pencarian"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-bar: Select All for Trash & Stats */}
+            {trashHistory.length > 0 && filteredTrashHistory.length > 0 && (
+              <div className="flex items-center justify-between gap-3 text-xs flex-wrap pt-1 border-t border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label
+                    className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer select-none shadow-2xs ${
+                      allVisibleSelected
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : someVisibleSelected
+                        ? 'bg-rose-50 text-rose-900 border-rose-300'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                    }`}
+                    title={allVisibleSelected ? "Batalkan pilihan semua sampah" : "Pilih semua struk sampah yang tampil untuk tindakan massal"}
+                    id="btn-select-all-trash"
                   >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={handleToggleSelectAll}
+                      className="w-3.5 h-3.5 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                      id="bulk-select-all-trash-checkbox"
+                    />
+                    <span>{allVisibleSelected ? 'Batalkan Semua' : 'Pilih Semua'}</span>
+                  </label>
+
+                  {selectedIds.length > 0 && (
+                    <span className="text-[11px] font-bold text-rose-950 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                      <span>{selectedIds.length} sampah dipilih</span>
+                      <button
+                        type="button"
+                        onClick={handleClearSelection}
+                        className="text-rose-700 hover:text-rose-950 transition cursor-pointer ml-0.5"
+                        title="Batalkan pilihan"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-slate-500 text-xs">
+                  <span className="font-bold text-slate-900">{filteredTrashHistory.length}</span> dari {trashHistory.length} struk di sampah
+                </div>
               </div>
             )}
           </div>
@@ -2671,7 +3173,7 @@ export default function ReceiptHistory({
                 </p>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('active')}
+                  onClick={() => handleSelectTab('active')}
                   className="mt-4 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <History className="w-3.5 h-3.5" /> Kembali ke Riwayat Transaksi
@@ -2692,22 +3194,41 @@ export default function ReceiptHistory({
               </div>
             ) : (
               <div className="divide-y divide-slate-100" id="trash-items-list">
-                {filteredTrashHistory.map((item) => {
+                {sortedTrashHistory.map((item) => {
+                  const isSelected = selectedIds.includes(item.id);
+
                   return (
                     <div 
                       key={item.id}
-                      className="p-4 transition flex flex-col md:flex-row justify-between md:items-center gap-3 hover:bg-rose-50/30 bg-white"
+                      className={`p-4 transition flex flex-col md:flex-row justify-between md:items-center gap-3 ${
+                        isSelected
+                          ? 'bg-rose-100/70 border-l-4 border-l-rose-600 ring-1 ring-rose-600/20'
+                          : 'hover:bg-rose-50/30 bg-white'
+                      }`}
                       id={`trash-item-${item.id}`}
                     >
-                      {/* Store & Metadata Details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
-                            SAMPAH
-                          </span>
-                          <span className="font-bold text-slate-800 text-sm truncate font-display">
-                            {item.storeName}
-                          </span>
+                      {/* Selection Checkbox & Store Details */}
+                      <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                        <div className="shrink-0 pt-0.5 sm:pt-0" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelect(item.id, e)}
+                            className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                            title={isSelected ? "Batal pilih sampah ini" : "Pilih sampah ini untuk tindakan massal"}
+                            id={`checkbox-trash-${item.id}`}
+                          />
+                        </div>
+
+                        {/* Store & Metadata Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
+                              SAMPAH
+                            </span>
+                            <span className="font-bold text-slate-800 text-sm truncate font-display">
+                              {item.storeName}
+                            </span>
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
                             {item.paymentMethod}
                           </span>
@@ -2792,8 +3313,9 @@ export default function ReceiptHistory({
                           )}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Right side Amount and Restore Actions */}
+                    {/* Right side Amount and Restore Actions */}
                       <div className="flex md:flex-col items-end justify-between md:justify-center gap-2 border-t md:border-t-0 border-slate-100 pt-3 md:pt-0 shrink-0">
                         <div className="text-right">
                           <span className="text-xs text-slate-400 block">Total Belanja</span>
@@ -2872,7 +3394,7 @@ export default function ReceiptHistory({
         </>
       )}
 
-      {/* TOOLBAR BULK-ACTION (Muncul otomatis saat struk dipilih) */}
+      {/* TOOLBAR BULK-ACTION (Muncul otomatis saat struk dipilih, spesifik sesuai tab yang aktif) */}
       {selectedIds.length > 0 && (
         <div 
           className="fixed bottom-6 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md text-white border border-slate-700/80 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-2xl shadow-slate-950/40 flex flex-wrap items-center justify-between sm:justify-center gap-3 transition-all"
@@ -2886,56 +3408,144 @@ export default function ReceiptHistory({
               {selectedIds.length}
             </span>
             <span className="text-xs font-semibold text-slate-200 whitespace-nowrap">
-              {selectedIds.length} struk dipilih
+              {activeTab === 'drafts'
+                ? `${selectedIds.length} draf dipilih`
+                : activeTab === 'archived'
+                ? `${selectedIds.length} arsip dipilih`
+                : activeTab === 'trash'
+                ? `${selectedIds.length} sampah dipilih`
+                : `${selectedIds.length} struk dipilih`}
             </span>
             <button
               type="button"
               onClick={handleClearSelection}
               className="text-[11px] text-slate-400 hover:text-white underline underline-offset-2 ml-1 cursor-pointer transition"
-              title="Batalkan pilihan struk"
+              title="Batalkan pilihan"
               id="btn-bulk-cancel-selection"
             >
               Batal
             </button>
           </div>
 
-          {/* Action Buttons: Arsipkan, Masukkan Sampah, Ekspor CSV */}
+          {/* Action Buttons: Context-Aware Per Tab */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Tombol Arsipkan (untuk tab active) */}
+            {/* TAB 1: ACTIVE HISTORY ACTIONS */}
             {activeTab === 'active' && (
-              <button
-                type="button"
-                onClick={handleBulkArchive}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
-                id="btn-bulk-archive"
-                title="Arsipkan semua struk yang dipilih ke tab Struk Yang Di Arsipkan"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                <span>Arsipkan</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkArchive}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-archive"
+                  title="Arsipkan semua struk yang dipilih ke tab Struk Yang Di Arsipkan"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>Arsipkan</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-trash"
+                  title="Pindahkan semua struk yang dipilih ke Kotak Sampah"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Masukkan Sampah</span>
+                </button>
+              </>
             )}
 
-            {/* Tombol Masukkan Sampah */}
-            <button
-              type="button"
-              onClick={handleBulkDelete}
-              className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
-              id="btn-bulk-trash"
-              title="Pindahkan semua struk yang dipilih ke Kotak Sampah"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Masukkan Sampah</span>
-            </button>
+            {/* TAB 2: DRAFTS ACTIONS */}
+            {activeTab === 'drafts' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkFinalizeDraftsAction}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-finalize-drafts"
+                  title="Finalisasikan draf terpilih langsung ke Riwayat Transaksi Aktif"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Finalisasikan ({selectedIds.length})</span>
+                </button>
 
-            {/* Tombol Ekspor CSV */}
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteDraftsAction}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-delete-drafts"
+                  title="Pindahkan draf terpilih ke Kotak Sampah"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Hapus ke Sampah</span>
+                </button>
+              </>
+            )}
+
+            {/* TAB 3: ARCHIVED ACTIONS */}
+            {activeTab === 'archived' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkUnarchiveAction}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-unarchive"
+                  title="Keluarkan struk terpilih dari Arsip kembali ke Riwayat Aktif"
+                >
+                  <ArchiveRestore className="w-3.5 h-3.5" />
+                  <span>Keluarkan dari Arsip ({selectedIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteArchivedAction}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-trash-archived"
+                  title="Pindahkan struk arsip terpilih ke Kotak Sampah"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Masukkan Sampah</span>
+                </button>
+              </>
+            )}
+
+            {/* TAB 4: TRASH ACTIONS */}
+            {activeTab === 'trash' && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkRestoreTrashAction}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-restore-trash"
+                  title="Pulihkan struk terpilih dari Sampah kembali ke Riwayat Aktif"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Pulihkan ({selectedIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkPermanentDeleteAction}
+                  className="px-3.5 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-permanent-delete"
+                  title="Hapus struk terpilih secara permanen selamanya"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Hapus Permanen</span>
+                </button>
+              </>
+            )}
+
+            {/* Universal: Ekspor CSV untuk semua tab */}
             <button
               type="button"
               onClick={handleBulkExportCSV}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs border border-slate-700"
               id="btn-bulk-export-csv"
               title="Ekspor semua struk yang dipilih ke berkas CSV Excel"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
               <span>Ekspor CSV</span>
             </button>
 

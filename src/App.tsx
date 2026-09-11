@@ -37,11 +37,18 @@ const DEFAULT_ITEMS: Item[] = [
   { id: '2', name: 'Roti Bakar Cokelat', quantity: 1, price: 15000 },
 ];
 
-function getFreshDefaultReceipt(customStoreName?: string, customStoreAddress?: string): Receipt {
+function getFreshDefaultReceipt(
+  customStoreName?: string, 
+  customStoreAddress?: string,
+  customCashierName?: string,
+  customStorePhone?: string
+): Receipt {
   const initialTxId = generateTransactionId();
   const initialDate = getInitialLocalDateTime();
   const defaultStore = customStoreName || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_name') : null) || 'KOPI SENJA CIPUTAT';
   const defaultAddress = customStoreAddress || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_address') : null) || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
+  const defaultCashier = customCashierName || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_cashier_name') : null) || 'Andi Wijaya';
+  const defaultPhone = customStorePhone || (typeof localStorage !== 'undefined' ? localStorage.getItem('strukku_default_store_phone') : null) || '021-7401234';
   const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
     DEFAULT_ITEMS,
     11, // Standard PPN 11%
@@ -53,9 +60,9 @@ function getFreshDefaultReceipt(customStoreName?: string, customStoreAddress?: s
     id: Date.now().toString(),
     storeName: defaultStore,
     storeAddress: defaultAddress,
-    storePhone: '021-7401234',
+    storePhone: defaultPhone,
     storeWebsite: 'www.kopisenjaabadi.com',
-    cashierName: 'Andi Wijaya',
+    cashierName: defaultCashier,
     transactionId: initialTxId,
     dateTime: initialDate,
     items: DEFAULT_ITEMS,
@@ -103,6 +110,16 @@ export default function App() {
   // Default Store Address setting (persisted in localStorage)
   const [defaultStoreAddress, setDefaultStoreAddress] = useState<string>(() => {
     return localStorage.getItem('strukku_default_store_address') || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
+  });
+
+  // Default Cashier Name setting (persisted in localStorage)
+  const [defaultCashierName, setDefaultCashierName] = useState<string>(() => {
+    return localStorage.getItem('strukku_default_cashier_name') || 'Andi Wijaya';
+  });
+
+  // Default Store Phone setting (persisted in localStorage)
+  const [defaultStorePhone, setDefaultStorePhone] = useState<string>(() => {
+    return localStorage.getItem('strukku_default_store_phone') || '021-7401234';
   });
 
   // Main history log of saved transactions
@@ -158,6 +175,8 @@ export default function App() {
   const [receipt, setReceipt] = useState<Receipt>(() => {
     const savedDefaultStore = localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
     const savedDefaultAddress = localStorage.getItem('strukku_default_store_address') || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
+    const savedDefaultCashier = localStorage.getItem('strukku_default_cashier_name') || 'Andi Wijaya';
+    const savedDefaultPhone = localStorage.getItem('strukku_default_store_phone') || '021-7401234';
     try {
       const activeDraftRaw = localStorage.getItem('strukku_active_draft');
       if (activeDraftRaw) {
@@ -169,7 +188,7 @@ export default function App() {
     } catch (e) {
       console.error('Error restoring active draft on init:', e);
     }
-    return getFreshDefaultReceipt(savedDefaultStore, savedDefaultAddress);
+    return getFreshDefaultReceipt(savedDefaultStore, savedDefaultAddress, savedDefaultCashier, savedDefaultPhone);
   });
 
   // Track last autosave timestamp
@@ -199,6 +218,21 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_default_store_name', defaultStoreName);
   }, [defaultStoreName]);
+
+  // Keep default store address preference in localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_default_store_address', defaultStoreAddress);
+  }, [defaultStoreAddress]);
+
+  // Keep default cashier name preference in localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_default_cashier_name', defaultCashierName);
+  }, [defaultCashierName]);
+
+  // Keep default store phone preference in localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_default_store_phone', defaultStorePhone);
+  }, [defaultStorePhone]);
 
   // Sync history state with localStorage
   useEffect(() => {
@@ -350,6 +384,34 @@ export default function App() {
     }
   };
 
+  // Update default cashier name setting and optionally update active receipt
+  const handleSetDefaultCashierName = (newCashierName: string, applyToCurrent: boolean = true) => {
+    const trimmed = newCashierName.trim();
+    if (!trimmed) return;
+    setDefaultCashierName(trimmed);
+    localStorage.setItem('strukku_default_cashier_name', trimmed);
+    if (applyToCurrent) {
+      setReceipt((prev) => ({
+        ...prev,
+        cashierName: trimmed,
+      }));
+    }
+  };
+
+  // Update default store phone setting and optionally update active receipt
+  const handleSetDefaultStorePhone = (newPhone: string, applyToCurrent: boolean = true) => {
+    const trimmed = newPhone.trim();
+    if (!trimmed) return;
+    setDefaultStorePhone(trimmed);
+    localStorage.setItem('strukku_default_store_phone', trimmed);
+    if (applyToCurrent) {
+      setReceipt((prev) => ({
+        ...prev,
+        storePhone: trimmed,
+      }));
+    }
+  };
+
   // Show a brief visual toast notification
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -396,7 +458,12 @@ export default function App() {
     });
 
     // Prepare a clean fresh receipt in generator for the next customer
-    const nextFreshReceipt = getFreshDefaultReceipt(defaultStoreName, defaultStoreAddress);
+    const nextFreshReceipt = getFreshDefaultReceipt(
+      defaultStoreName, 
+      defaultStoreAddress, 
+      defaultCashierName, 
+      defaultStorePhone
+    );
     setReceipt(nextFreshReceipt);
     receiptRef.current = nextFreshReceipt;
     try {
@@ -417,6 +484,8 @@ export default function App() {
     const formattedNow = getInitialLocalDateTime();
     const effectiveStore = defaultStoreName || 'KOPI SENJA CIPUTAT';
     const effectiveAddress = defaultStoreAddress || 'Jl. Raya Ciputat Raya No. 42, Jakarta';
+    const effectiveCashier = defaultCashierName || 'Andi Wijaya';
+    const effectivePhone = defaultStorePhone || '021-7401234';
     
     setReceipt((prev) => {
       const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
@@ -431,6 +500,8 @@ export default function App() {
         id: Date.now().toString(),
         storeName: effectiveStore,
         storeAddress: effectiveAddress,
+        cashierName: effectiveCashier,
+        storePhone: effectivePhone,
         transactionId: nextTxId,
         dateTime: formattedNow,
         items: [],
@@ -641,6 +712,96 @@ export default function App() {
     showToast(`🗑️ ${itemsToDelete.length} struk dipindahkan ke Sampah.`);
   };
 
+  // Bulk Finalize Drafts: convert selected drafts into finalized transactions
+  const handleBulkFinalizeDrafts = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setHistory((prev) => {
+      const updated = prev.map((item) => {
+        if (idSet.has(item.id) && item.isDraft) {
+          return {
+            ...item,
+            isDraft: false,
+            draftSavedAt: undefined,
+          };
+        }
+        return item;
+      });
+      return updated;
+    });
+
+    if (receiptRef.current?.id && idSet.has(receiptRef.current.id)) {
+      setReceipt((prev) => ({
+        ...prev,
+        isDraft: false,
+        draftSavedAt: undefined,
+      }));
+      localStorage.removeItem('strukku_active_draft');
+    }
+
+    showToast(`✅ ${ids.length} draf struk berhasil difinalisasi ke Semua Riwayat!`);
+  };
+
+  // Bulk Unarchive Receipts back to active history
+  const handleBulkUnarchiveReceipts = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToRestore = archivedHistory.filter((item) => idSet.has(item.id));
+    if (itemsToRestore.length === 0) return;
+
+    const restoredItems: Receipt[] = itemsToRestore.map((item) => ({
+      ...item,
+      isArchived: false,
+      archivedAt: undefined,
+    }));
+
+    setArchivedHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setHistory((prev) => [...restoredItems, ...prev.filter((item) => !idSet.has(item.id))]);
+    showToast(`📂 ${itemsToRestore.length} struk arsip berhasil dikembalikan ke Riwayat Aktif!`);
+  };
+
+  // Bulk Delete from Archived History into Trash
+  const handleBulkDeleteArchivedReceipts = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToDelete = archivedHistory.filter((item) => idSet.has(item.id));
+    if (itemsToDelete.length === 0) return;
+    const now = new Date().toISOString();
+    const markedItems: Receipt[] = itemsToDelete.map((item) => ({
+      ...item,
+      deletedAt: item.deletedAt || now,
+    }));
+
+    setArchivedHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setTrashHistory((prev) => [...markedItems, ...prev.filter((item) => !idSet.has(item.id))]);
+    showToast(`🗑️ ${itemsToDelete.length} struk arsip dipindahkan ke Sampah.`);
+  };
+
+  // Bulk Restore from Trash back to active history
+  const handleBulkRestoreTrash = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const itemsToRestore = trashHistory.filter((item) => idSet.has(item.id));
+    if (itemsToRestore.length === 0) return;
+
+    const restoredItems: Receipt[] = itemsToRestore.map((item) => ({
+      ...item,
+      deletedAt: undefined,
+    }));
+
+    setTrashHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setHistory((prev) => [...restoredItems, ...prev.filter((item) => !idSet.has(item.id))]);
+    showToast(`♻️ ${itemsToRestore.length} struk sampah berhasil dipulihkan ke Riwayat!`);
+  };
+
+  // Bulk Permanently Delete receipts from Trash
+  const handleBulkPermanentDeleteTrash = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setTrashHistory((prev) => prev.filter((item) => !idSet.has(item.id)));
+    showToast(`🗑️ ${ids.length} struk dihapus permanen dari Kotak Sampah.`);
+  };
+
   // Clear entire history (moves all active receipts to Trash)
   const handleClearHistory = () => {
     if (history.length === 0) return;
@@ -811,7 +972,9 @@ export default function App() {
     setCurrencySymbol('Rp');
     setDefaultStoreName('KOPI SENJA CIPUTAT');
     setDefaultStoreAddress('Jl. Raya Ciputat Raya No. 42, Jakarta');
-    setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT', 'Jl. Raya Ciputat Raya No. 42, Jakarta'));
+    setDefaultCashierName('Andi Wijaya');
+    setDefaultStorePhone('021-7401234');
+    setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT', 'Jl. Raya Ciputat Raya No. 42, Jakarta', 'Andi Wijaya', '021-7401234'));
     showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
   };
 
@@ -823,6 +986,8 @@ export default function App() {
     currencySymbol?: string;
     defaultStoreName?: string;
     defaultStoreAddress?: string;
+    defaultCashierName?: string;
+    defaultStorePhone?: string;
     activeReceipt?: Receipt;
   }) => {
     if (Array.isArray(backupData.history)) {
@@ -847,6 +1012,14 @@ export default function App() {
     if (backupData.defaultStoreAddress) {
       setDefaultStoreAddress(backupData.defaultStoreAddress);
       localStorage.setItem('strukku_default_store_address', backupData.defaultStoreAddress);
+    }
+    if (backupData.defaultCashierName) {
+      setDefaultCashierName(backupData.defaultCashierName);
+      localStorage.setItem('strukku_default_cashier_name', backupData.defaultCashierName);
+    }
+    if (backupData.defaultStorePhone) {
+      setDefaultStorePhone(backupData.defaultStorePhone);
+      localStorage.setItem('strukku_default_store_phone', backupData.defaultStorePhone);
     }
     if (backupData.activeReceipt && typeof backupData.activeReceipt === 'object') {
       setReceipt(backupData.activeReceipt);
@@ -1019,6 +1192,10 @@ export default function App() {
                 onSetDefaultStoreName={handleSetDefaultStoreName}
                 defaultStoreAddress={defaultStoreAddress}
                 onSetDefaultStoreAddress={handleSetDefaultStoreAddress}
+                defaultCashierName={defaultCashierName}
+                onSetDefaultCashierName={handleSetDefaultCashierName}
+                defaultStorePhone={defaultStorePhone}
+                onSetDefaultStorePhone={handleSetDefaultStorePhone}
                 lastAutosavedAt={lastAutosavedAt}
               />
             </div>
@@ -1064,6 +1241,11 @@ export default function App() {
               onPermanentDeleteReceipt={handlePermanentDeleteReceipt}
               onEmptyTrash={handleEmptyTrash}
               onImportHistory={handleImportHistory}
+              onBulkFinalizeDrafts={handleBulkFinalizeDrafts}
+              onBulkUnarchiveReceipts={handleBulkUnarchiveReceipts}
+              onBulkDeleteArchivedReceipts={handleBulkDeleteArchivedReceipts}
+              onBulkRestoreTrash={handleBulkRestoreTrash}
+              onBulkPermanentDeleteTrash={handleBulkPermanentDeleteTrash}
               currencySymbol={currencySymbol}
             />
           </div>
@@ -1091,6 +1273,10 @@ export default function App() {
               onSetDefaultStoreName={handleSetDefaultStoreName}
               defaultStoreAddress={defaultStoreAddress}
               onSetDefaultStoreAddress={handleSetDefaultStoreAddress}
+              defaultCashierName={defaultCashierName}
+              onSetDefaultCashierName={handleSetDefaultCashierName}
+              defaultStorePhone={defaultStorePhone}
+              onSetDefaultStorePhone={handleSetDefaultStorePhone}
               onResetAllData={handleResetAllData}
               onRestoreBackup={handleRestoreBackup}
               showToast={showToast}

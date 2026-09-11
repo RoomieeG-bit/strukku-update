@@ -102,6 +102,10 @@ interface ReceiptFormProps {
   onSetDefaultStoreName?: (storeName: string) => void;
   defaultStoreAddress?: string;
   onSetDefaultStoreAddress?: (storeAddress: string) => void;
+  defaultCashierName?: string;
+  onSetDefaultCashierName?: (cashierName: string) => void;
+  defaultStorePhone?: string;
+  onSetDefaultStorePhone?: (storePhone: string) => void;
   lastAutosavedAt?: Date | null;
 }
 
@@ -224,6 +228,10 @@ export default function ReceiptForm({
   onSetDefaultStoreName,
   defaultStoreAddress,
   onSetDefaultStoreAddress,
+  defaultCashierName,
+  onSetDefaultCashierName,
+  defaultStorePhone,
+  onSetDefaultStorePhone,
   lastAutosavedAt,
 }: ReceiptFormProps) {
   // Local state for adding a single item
@@ -1111,7 +1119,27 @@ export default function ReceiptForm({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="cashier-name-input">Nama Kasir</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-700" htmlFor="cashier-name-input">
+                    Nama Kasir
+                  </label>
+                  {defaultCashierName && (
+                    receipt.cashierName === defaultCashierName ? (
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5 text-blue-600" /> Kasir Default
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculate({ cashierName: defaultCashierName })}
+                        className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title={`Pakai kasir default: ${defaultCashierName}`}
+                      >
+                        Pakai Default
+                      </button>
+                    )
+                  )}
+                </div>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                     <User className="w-4 h-4" />
@@ -1125,6 +1153,24 @@ export default function ReceiptForm({
                     placeholder="Nama Kasir"
                   />
                 </div>
+                {defaultCashierName && receipt.cashierName !== defaultCashierName && onSetDefaultCashierName && (
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="truncate max-w-[170px]" title={defaultCashierName}>
+                      Default: <strong className="font-mono text-slate-700">{defaultCashierName}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = receipt.cashierName.trim();
+                        if (trimmed) onSetDefaultCashierName(trimmed);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline shrink-0"
+                      title="Simpan nama kasir ini sebagai kasir default baru"
+                    >
+                      Jadikan Default
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1203,15 +1249,58 @@ export default function ReceiptForm({
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="store-phone-input">No. Telepon</label>
-                <input
-                  type="text"
-                  id="store-phone-input"
-                  value={receipt.storePhone}
-                  onChange={(e) => handleRecalculate({ storePhone: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
-                  placeholder="021-XXXXXXX"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-700" htmlFor="store-phone-input">
+                    No. Telepon
+                  </label>
+                  {defaultStorePhone && (
+                    receipt.storePhone === defaultStorePhone ? (
+                      <span className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5 text-teal-600" /> Telepon Default
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculate({ storePhone: defaultStorePhone })}
+                        className="text-[10px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-1.5 py-0.5 rounded transition cursor-pointer"
+                        title={`Pakai no. telepon default: ${defaultStorePhone}`}
+                      >
+                        Pakai Default
+                      </button>
+                    )
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Phone className="w-4 h-4 text-slate-400" />
+                  </span>
+                  <input
+                    type="text"
+                    id="store-phone-input"
+                    value={receipt.storePhone}
+                    onChange={(e) => handleRecalculate({ storePhone: e.target.value })}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
+                    placeholder="021-XXXXXXX atau 0812-XXXX-XXXX"
+                  />
+                </div>
+                {defaultStorePhone && receipt.storePhone !== defaultStorePhone && onSetDefaultStorePhone && (
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                    <span className="truncate max-w-[170px]" title={defaultStorePhone}>
+                      Default: <strong className="font-mono text-slate-700">{defaultStorePhone}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = receipt.storePhone.trim();
+                        if (trimmed) onSetDefaultStorePhone(trimmed);
+                      }}
+                      className="text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer underline shrink-0"
+                      title="Simpan no. telepon ini sebagai telepon default baru"
+                    >
+                      Jadikan Default
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="store-website-input">Website Toko</label>
