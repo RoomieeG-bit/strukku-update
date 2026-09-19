@@ -125,6 +125,16 @@ export interface Receipt {
   draftSavedAt?: string; // ISO string when receipt draft was autosaved
 }
 
+export interface ReceiptGroup {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string; // Color identifier: 'indigo' | 'emerald' | 'amber' | 'rose' | 'blue' | 'purple' etc.
+  receiptIds: string[]; // List of Receipt IDs assigned to this group
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoreProfile {
   storeName: string;
   storeAddress: string;

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item } from './types';
+import { Receipt, Item, ReceiptGroup } from './types';
 import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
@@ -171,6 +171,22 @@ export default function App() {
     return [];
   });
 
+  // Receipt Groups (categories / bundles of receipts created by user)
+  const [receiptGroups, setReceiptGroups] = useState<ReceiptGroup[]>(() => {
+    const stored = localStorage.getItem('strukku_receipt_groups');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing local storage receipt groups:', e);
+      }
+    }
+    return [];
+  });
+
   // Active receipt state in the editor with autosave draft recovery
   const [receipt, setReceipt] = useState<Receipt>(() => {
     const savedDefaultStore = localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
@@ -248,6 +264,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_archived_history', JSON.stringify(archivedHistory));
   }, [archivedHistory]);
+
+  // Sync receiptGroups state with localStorage
+  useEffect(() => {
+    localStorage.setItem('strukku_receipt_groups', JSON.stringify(receiptGroups));
+  }, [receiptGroups]);
 
   // 1. Continuous reactive autosave on every receipt change:
   // Whenever the user types, adds an item, changes price, cashier, or store name on mobile or desktop,
@@ -969,6 +990,7 @@ export default function App() {
     setHistory([]);
     setArchivedHistory([]);
     setTrashHistory([]);
+    setReceiptGroups([]);
     setCurrencySymbol('Rp');
     setDefaultStoreName('KOPI SENJA CIPUTAT');
     setDefaultStoreAddress('Jl. Raya Ciputat Raya No. 42, Jakarta');
@@ -1021,10 +1043,87 @@ export default function App() {
       setDefaultStorePhone(backupData.defaultStorePhone);
       localStorage.setItem('strukku_default_store_phone', backupData.defaultStorePhone);
     }
+    if (Array.isArray((backupData as any).receiptGroups)) {
+      setReceiptGroups((backupData as any).receiptGroups);
+      localStorage.setItem('strukku_receipt_groups', JSON.stringify((backupData as any).receiptGroups));
+    }
     if (backupData.activeReceipt && typeof backupData.activeReceipt === 'object') {
       setReceipt(backupData.activeReceipt);
     }
     showToast('🎉 Seluruh data cadangan lengkap berhasil dipulihkan!');
+  };
+
+  // Group Management Handlers
+  const handleCreateGroup = (name: string, description?: string, color?: string): ReceiptGroup => {
+    const trimmedName = name.trim() || 'Grup Struk Baru';
+    const newGroup: ReceiptGroup = {
+      id: 'grp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+      name: trimmedName,
+      description: description?.trim() || '',
+      color: color || 'indigo',
+      receiptIds: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setReceiptGroups((prev) => [newGroup, ...prev]);
+    showToast(`📁 Grup "${trimmedName}" berhasil dibuat!`);
+    return newGroup;
+  };
+
+  const handleUpdateGroup = (id: string, updates: Partial<ReceiptGroup>) => {
+    setReceiptGroups((prev) =>
+      prev.map((grp) =>
+        grp.id === id
+          ? { ...grp, ...updates, updatedAt: new Date().toISOString() }
+          : grp
+      )
+    );
+    showToast(`✓ Grup berhasil diperbarui!`);
+  };
+
+  const handleDeleteGroup = (id: string) => {
+    const targetGroup = receiptGroups.find((grp) => grp.id === id);
+    setReceiptGroups((prev) => prev.filter((grp) => grp.id !== id));
+    showToast(`🗑️ Grup "${targetGroup?.name || ''}" berhasil dihapus.`);
+  };
+
+  const handleAddReceiptsToGroup = (groupId: string, receiptIdsToAdd: string[]) => {
+    let groupName = '';
+    let addedCount = 0;
+    setReceiptGroups((prev) =>
+      prev.map((grp) => {
+        if (grp.id === groupId) {
+          groupName = grp.name;
+          const currentSet = new Set(grp.receiptIds);
+          receiptIdsToAdd.forEach((id) => currentSet.add(id));
+          const newIds = Array.from(currentSet);
+          addedCount = newIds.length - grp.receiptIds.length;
+          return {
+            ...grp,
+            receiptIds: newIds,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return grp;
+      })
+    );
+    showToast(`✓ Berhasil memasukkan ${receiptIdsToAdd.length} struk ke grup "${groupName}"!`);
+  };
+
+  const handleRemoveReceiptFromGroup = (groupId: string, receiptIdToRemove: string) => {
+    setReceiptGroups((prev) =>
+      prev.map((grp) => {
+        if (grp.id === groupId) {
+          return {
+            ...grp,
+            receiptIds: grp.receiptIds.filter((id) => id !== receiptIdToRemove),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return grp;
+      })
+    );
+    showToast(`Struk dikeluarkan dari grup.`);
   };
 
   return (
@@ -1247,6 +1346,12 @@ export default function App() {
               onBulkRestoreTrash={handleBulkRestoreTrash}
               onBulkPermanentDeleteTrash={handleBulkPermanentDeleteTrash}
               currencySymbol={currencySymbol}
+              groups={receiptGroups}
+              onCreateGroup={handleCreateGroup}
+              onUpdateGroup={handleUpdateGroup}
+              onDeleteGroup={handleDeleteGroup}
+              onAddReceiptsToGroup={handleAddReceiptsToGroup}
+              onRemoveReceiptFromGroup={handleRemoveReceiptFromGroup}
             />
           </div>
         )}

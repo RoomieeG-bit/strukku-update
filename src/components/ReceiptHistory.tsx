@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Receipt } from '../types';
+import { Receipt, ReceiptGroup } from '../types';
 import { formatCurrency, formatDateTime, exportReceiptsToCSV } from '../utils';
 import { 
   Search, 
@@ -40,9 +40,14 @@ import {
   List,
   Pencil,
   FileEdit,
-  ArrowUpDown
+  ArrowUpDown,
+  Folder,
+  FolderPlus,
+  FolderOpen
 } from 'lucide-react';
 import EditReceiptModal from './EditReceiptModal';
+import AddToGroupModal from './AddToGroupModal';
+import ReceiptGroupsTab from './ReceiptGroupsTab';
 
 export type HistorySortOption = 
   | 'DATE_DESC' 
@@ -58,6 +63,12 @@ interface ReceiptHistoryProps {
   history: Receipt[];
   archivedHistory?: Receipt[];
   trashHistory?: Receipt[];
+  groups?: ReceiptGroup[];
+  onCreateGroup?: (name: string, description?: string, color?: string) => ReceiptGroup | void;
+  onUpdateGroup?: (id: string, updates: Partial<ReceiptGroup>) => void;
+  onDeleteGroup?: (id: string) => void;
+  onAddReceiptsToGroup?: (groupId: string, receiptIds: string[]) => void;
+  onRemoveReceiptFromGroup?: (groupId: string, receiptId: string) => void;
   onLoadReceipt: (receipt: Receipt) => void;
   onUpdateReceipt?: (receipt: Receipt) => void;
   onTogglePinReceipt?: (id: string) => void;
@@ -92,6 +103,12 @@ export default function ReceiptHistory({
   history,
   archivedHistory = [],
   trashHistory = [],
+  groups = [],
+  onCreateGroup,
+  onUpdateGroup,
+  onDeleteGroup,
+  onAddReceiptsToGroup,
+  onRemoveReceiptFromGroup,
   onLoadReceipt,
   onUpdateReceipt,
   onTogglePinReceipt,
@@ -122,7 +139,8 @@ export default function ReceiptHistory({
   currencySymbol,
 }: ReceiptHistoryProps) {
   const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'drafts' | 'archived' | 'trash'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'groups' | 'drafts' | 'archived' | 'trash'>('active');
+  const [isAddToGroupModalOpen, setIsAddToGroupModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     try {
       const saved = localStorage.getItem('strukku_history_view_mode');
@@ -418,7 +436,7 @@ export default function ReceiptHistory({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // When switching tabs, clear selected items
-  const handleSelectTab = (tab: 'active' | 'drafts' | 'archived' | 'trash') => {
+  const handleSelectTab = (tab: 'active' | 'groups' | 'drafts' | 'archived' | 'trash') => {
     setActiveTab(tab);
     setSelectedIds([]);
   };
@@ -438,7 +456,9 @@ export default function ReceiptHistory({
     ? sortedDraftHistory
     : activeTab === 'archived'
     ? sortedArchivedHistory
-    : sortedTrashHistory;
+    : activeTab === 'trash'
+    ? sortedTrashHistory
+    : [];
 
   const allVisibleSelected =
     currentVisibleReceipts.length > 0 &&
@@ -726,6 +746,8 @@ export default function ReceiptHistory({
                 <Archive className="w-5 h-5" />
               ) : activeTab === 'drafts' ? (
                 <FileEdit className="w-5 h-5" />
+              ) : activeTab === 'groups' ? (
+                <Folder className="w-5 h-5" />
               ) : (
                 <History className="w-5 h-5" />
               )}
@@ -738,6 +760,8 @@ export default function ReceiptHistory({
                   ? 'Struk Yang Di Arsipkan'
                   : activeTab === 'drafts'
                   ? 'Draf Struk Penjualan'
+                  : activeTab === 'groups'
+                  ? 'Grup Struk Transaksi'
                   : 'Riwayat Transaksi'}
               </h3>
               <span className="text-xs text-slate-500 font-medium">
@@ -747,6 +771,8 @@ export default function ReceiptHistory({
                   ? 'Kumpulan struk yang diarsipkan agar buku kas tetap rapi dan ringkas'
                   : activeTab === 'drafts'
                   ? 'Struk yang belum difinalisasi atau tersimpan otomatis saat browser ditutup'
+                  : activeTab === 'groups'
+                  ? 'Kelola kumpulan struk belanja berdasarkan kelompok grup transaksi'
                   : 'Laporan penjualan & riwayat transaksi final'}
               </span>
             </div>
@@ -774,7 +800,31 @@ export default function ReceiptHistory({
               </span>
             </button>
 
-            {/* Tab 2: Draf */}
+            {/* Tab 2: Grup */}
+            <button
+              type="button"
+              onClick={() => handleSelectTab('groups')}
+              className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer border ${
+                activeTab === 'groups'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                  : 'bg-white text-slate-600 hover:text-indigo-900 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50'
+              }`}
+              id="tab-history-groups"
+            >
+              <Folder className="w-3.5 h-3.5" />
+              <span>Grup</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === 'groups'
+                  ? 'bg-white text-indigo-900 font-extrabold'
+                  : groups.length > 0
+                  ? 'bg-indigo-100 text-indigo-900 border border-indigo-200 font-extrabold'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {groups.length}
+              </span>
+            </button>
+
+            {/* Tab 3: Draf */}
             <button
               type="button"
               onClick={() => handleSelectTab('drafts')}
@@ -1812,6 +1862,22 @@ export default function ReceiptHistory({
             </div>
           )}
         </>
+      )}
+
+      {/* TAB CONTENT: GRUP STRUK TRANSAKSI */}
+      {activeTab === 'groups' && (
+        <ReceiptGroupsTab
+          groups={groups}
+          allReceipts={[...history, ...archivedHistory]}
+          currencySymbol={currencySymbol}
+          onCreateGroup={onCreateGroup}
+          onUpdateGroup={onUpdateGroup}
+          onDeleteGroup={onDeleteGroup}
+          onRemoveReceiptFromGroup={onRemoveReceiptFromGroup}
+          onLoadReceipt={onLoadReceipt}
+          onEditReceipt={setEditingReceipt}
+          onNavigateToActiveTab={() => handleSelectTab('active')}
+        />
       )}
 
       {/* TAB CONTENT: DRAF STRUK PENJUALAN */}
@@ -3434,6 +3500,17 @@ export default function ReceiptHistory({
               <>
                 <button
                   type="button"
+                  onClick={() => setIsAddToGroupModalOpen(true)}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
+                  id="btn-bulk-add-to-group"
+                  title="Masukkan semua struk yang dipilih ke dalam Grup Struk"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  <span>Masukkan ke Grup</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleBulkArchive}
                   className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-xs"
                   id="btn-bulk-archive"
@@ -3643,6 +3720,18 @@ export default function ReceiptHistory({
           setEditingReceipt(null);
         }}
         onOpenInGenerator={onLoadReceipt}
+        currencySymbol={currencySymbol}
+      />
+
+      {/* Modal Masukkan Struk ke Grup (Bulk Action) */}
+      <AddToGroupModal
+        isOpen={isAddToGroupModalOpen}
+        onClose={() => setIsAddToGroupModalOpen(false)}
+        selectedReceiptIds={selectedIds}
+        groups={groups}
+        onCreateGroup={onCreateGroup}
+        onAddReceiptsToGroup={onAddReceiptsToGroup}
+        onClearSelection={handleClearSelection}
         currencySymbol={currencySymbol}
       />
     </div>
