@@ -187,6 +187,12 @@ export default function App() {
     return [];
   });
 
+  // Stable ref for receiptGroups to prevent closure staleness in callbacks and notifications
+  const receiptGroupsRef = React.useRef(receiptGroups);
+  useEffect(() => {
+    receiptGroupsRef.current = receiptGroups;
+  }, [receiptGroups]);
+
   // Active receipt state in the editor with autosave draft recovery
   const [receipt, setReceipt] = useState<Receipt>(() => {
     const savedDefaultStore = localStorage.getItem('strukku_default_store_name') || 'KOPI SENJA CIPUTAT';
@@ -1065,12 +1071,16 @@ export default function App() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    receiptGroupsRef.current = [newGroup, ...receiptGroupsRef.current];
     setReceiptGroups((prev) => [newGroup, ...prev]);
     showToast(`📁 Grup "${trimmedName}" berhasil dibuat!`);
     return newGroup;
   };
 
   const handleUpdateGroup = (id: string, updates: Partial<ReceiptGroup>) => {
+    receiptGroupsRef.current = receiptGroupsRef.current.map((grp) =>
+      grp.id === id ? { ...grp, ...updates, updatedAt: new Date().toISOString() } : grp
+    );
     setReceiptGroups((prev) =>
       prev.map((grp) =>
         grp.id === id
@@ -1078,26 +1088,35 @@ export default function App() {
           : grp
       )
     );
-    showToast(`✓ Grup berhasil diperbarui!`);
+    if (updates.name) {
+      showToast(`✓ Nama grup berhasil diubah menjadi "${updates.name}"!`);
+    } else {
+      showToast(`✓ Grup berhasil diperbarui!`);
+    }
   };
 
   const handleDeleteGroup = (id: string) => {
-    const targetGroup = receiptGroups.find((grp) => grp.id === id);
+    const targetGroup = receiptGroupsRef.current.find((grp) => grp.id === id) || receiptGroups.find((grp) => grp.id === id);
+    const groupName = targetGroup?.name || '';
+    receiptGroupsRef.current = receiptGroupsRef.current.filter((grp) => grp.id !== id);
     setReceiptGroups((prev) => prev.filter((grp) => grp.id !== id));
-    showToast(`🗑️ Grup "${targetGroup?.name || ''}" berhasil dihapus.`);
+    showToast(`🗑️ Grup "${groupName}" berhasil dihapus.`);
   };
 
-  const handleAddReceiptsToGroup = (groupId: string, receiptIdsToAdd: string[]) => {
-    let groupName = '';
-    let addedCount = 0;
-    setReceiptGroups((prev) =>
-      prev.map((grp) => {
+  const handleAddReceiptsToGroup = (groupId: string, receiptIdsToAdd: string[], explicitGroupName?: string) => {
+    // Reliably retrieve group name from explicit argument or current ref/state
+    const matchedGroup =
+      receiptGroupsRef.current.find((grp) => grp.id === groupId) ||
+      receiptGroups.find((grp) => grp.id === groupId);
+
+    const groupName = (explicitGroupName || matchedGroup?.name || '').trim();
+
+    setReceiptGroups((prev) => {
+      const updated = prev.map((grp) => {
         if (grp.id === groupId) {
-          groupName = grp.name;
           const currentSet = new Set(grp.receiptIds);
           receiptIdsToAdd.forEach((id) => currentSet.add(id));
           const newIds = Array.from(currentSet);
-          addedCount = newIds.length - grp.receiptIds.length;
           return {
             ...grp,
             receiptIds: newIds,
@@ -1105,9 +1124,13 @@ export default function App() {
           };
         }
         return grp;
-      })
-    );
-    showToast(`✓ Berhasil memasukkan ${receiptIdsToAdd.length} struk ke grup "${groupName}"!`);
+      });
+      receiptGroupsRef.current = updated;
+      return updated;
+    });
+
+    const displayGroupName = groupName || 'Grup Struk';
+    showToast(`✓ Berhasil memasukkan ${receiptIdsToAdd.length} struk ke grup "${displayGroupName}"!`);
   };
 
   const handleRemoveReceiptFromGroup = (groupId: string, receiptIdToRemove: string) => {

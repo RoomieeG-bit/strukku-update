@@ -67,7 +67,7 @@ interface ReceiptHistoryProps {
   onCreateGroup?: (name: string, description?: string, color?: string) => ReceiptGroup | void;
   onUpdateGroup?: (id: string, updates: Partial<ReceiptGroup>) => void;
   onDeleteGroup?: (id: string) => void;
-  onAddReceiptsToGroup?: (groupId: string, receiptIds: string[]) => void;
+  onAddReceiptsToGroup?: (groupId: string, receiptIds: string[], groupName?: string) => void;
   onRemoveReceiptFromGroup?: (groupId: string, receiptId: string) => void;
   onLoadReceipt: (receipt: Receipt) => void;
   onUpdateReceipt?: (receipt: Receipt) => void;

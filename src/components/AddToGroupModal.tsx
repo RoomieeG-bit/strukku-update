@@ -22,7 +22,7 @@ interface AddToGroupModalProps {
   selectedReceiptIds: string[];
   groups: ReceiptGroup[];
   onCreateGroup?: (name: string, description?: string, color?: string) => ReceiptGroup | void;
-  onAddReceiptsToGroup?: (groupId: string, receiptIds: string[]) => void;
+  onAddReceiptsToGroup?: (groupId: string, receiptIds: string[], groupName?: string) => void;
   onClearSelection?: () => void;
   currencySymbol: string;
 }
@@ -54,13 +54,15 @@ export default function AddToGroupModal({
 
   const handleCreateAndAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
+    const trimmed = newGroupName.trim();
+    if (!trimmed) return;
 
     if (onCreateGroup) {
-      const created = onCreateGroup(newGroupName.trim(), '', selectedColor);
+      const created = onCreateGroup(trimmed, '', selectedColor);
       const targetId = (created as ReceiptGroup)?.id;
+      const targetName = (created as ReceiptGroup)?.name || trimmed;
       if (targetId && onAddReceiptsToGroup) {
-        onAddReceiptsToGroup(targetId, selectedReceiptIds);
+        onAddReceiptsToGroup(targetId, selectedReceiptIds, targetName);
       }
     }
     setNewGroupName('');
@@ -69,11 +71,11 @@ export default function AddToGroupModal({
     onClose();
   };
 
-  const handleSelectGroup = (groupId: string) => {
+  const handleSelectGroup = (group: ReceiptGroup) => {
     if (onAddReceiptsToGroup) {
-      onAddReceiptsToGroup(groupId, selectedReceiptIds);
+      onAddReceiptsToGroup(group.id, selectedReceiptIds, group.name);
     }
-    setAddedGroupId(groupId);
+    setAddedGroupId(group.id);
     setTimeout(() => {
       onClearSelection?.();
       onClose();
@@ -252,7 +254,7 @@ export default function AddToGroupModal({
                       {/* Prominent '+' Button as requested */}
                       <button
                         type="button"
-                        onClick={() => handleSelectGroup(group.id)}
+                        onClick={() => handleSelectGroup(group)}
                         disabled={allAlreadyIn || isSuccess}
                         className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 shadow-2xs ${
                           isSuccess
