@@ -251,6 +251,12 @@ export default function EditReceiptModal({
                     Arsip
                   </span>
                 )}
+                {receipt.isChained && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                    <span>⛓️</span>
+                    <span>Rantai dari #{receipt.parentTransactionId || 'Induk'}</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500">
                 Perbarui item belanja, nominal, informasi toko, atau rincian pembayaran langsung di riwayat ledger.
@@ -661,6 +667,9 @@ export default function EditReceiptModal({
                     <option value="SUDAH_LUNAS">✅ Sudah Lunas (LUNAS)</option>
                     <option value="BELUM_LUNAS">⏳ Belum Lunas (PENDING)</option>
                     <option value="HUTANG">💸 Hutang / Bon (TEMPO)</option>
+                    {(receipt?.isChained || paymentStatus === 'REFUND') && (
+                      <option value="REFUND">↩️ Refund (PENGEMBALIAN DANA)</option>
+                    )}
                   </select>
                 </div>
 

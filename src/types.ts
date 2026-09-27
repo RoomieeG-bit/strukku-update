@@ -79,6 +79,21 @@ export interface InventoryItem {
   createdAt?: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  memberId?: string;
+  category?: 'Reguler' | 'VIP' | 'Member' | 'Grosir' | string;
+  discountRate?: number; // Member percentage discount, e.g. 5 for 5%
+  notes?: string;
+  totalTransactions?: number;
+  totalSpent?: number;
+  createdAt?: string;
+}
+
 export interface Receipt {
   id: string;
   storeName: string;

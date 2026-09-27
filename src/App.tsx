@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Receipt, Item, ReceiptGroup } from './types';
+import { Receipt, Item, ReceiptGroup, Customer } from './types';
 import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
 import ReceiptHistory from './components/ReceiptHistory';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
+import CustomerListTab, { DEFAULT_CUSTOMERS } from './components/CustomerListTab';
 import { 
   PlusCircle, 
   History, 
@@ -20,7 +21,8 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Users
 } from 'lucide-react';
 
 // Get local date-time string in YYYY-MM-DDTHH:mm format
@@ -95,7 +97,32 @@ function getFreshDefaultReceipt(
 
 export default function App() {
   // Global active view tab
-  const [activeView, setActiveView] = useState<'generator' | 'history' | 'dashboard' | 'settings'>('generator');
+  const [activeView, setActiveView] = useState<'generator' | 'customers' | 'history' | 'dashboard' | 'settings'>('generator');
+  
+  // Customer List state persisted in localStorage
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    try {
+      const stored = localStorage.getItem('strukku_customers');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading customers from localStorage:', e);
+    }
+    return DEFAULT_CUSTOMERS;
+  });
+
+  // Keep customers in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('strukku_customers', JSON.stringify(customers));
+    } catch (e) {
+      console.error('Error saving customers to localStorage:', e);
+    }
+  }, [customers]);
   
   // Currency setting
   const [currencySymbol, setCurrencySymbol] = useState<string>(() => {
@@ -1198,6 +1225,25 @@ export default function App() {
               <span>Generator POS</span>
             </button>
             <button
+              onClick={() => setActiveView('customers')}
+              className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative ${
+                activeView === 'customers'
+                  ? 'bg-white text-slate-950 shadow-2xs border border-slate-200/80'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+              id="nav-customer-tab"
+            >
+              <Users className="w-3.5 h-3.5 text-sky-500" />
+              <span>Daftar Pelanggan</span>
+              {customers.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold leading-none ${
+                  activeView === 'customers' ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-800'
+                }`}>
+                  {customers.length}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => {
                 // Safely save current unfinalized receipt with items as draft
                 if (receipt.items && receipt.items.length > 0) {
@@ -1319,6 +1365,9 @@ export default function App() {
                 defaultStorePhone={defaultStorePhone}
                 onSetDefaultStorePhone={handleSetDefaultStorePhone}
                 lastAutosavedAt={lastAutosavedAt}
+                customers={customers}
+                onUpdateCustomers={setCustomers}
+                onNavigateToCustomers={() => setActiveView('customers')}
               />
             </div>
 
@@ -1331,6 +1380,37 @@ export default function App() {
               />
             </div>
 
+          </div>
+        )}
+
+        {/* VIEW: MAIN CUSTOMER LIST / DAFTAR PELANGGAN UTAMA */}
+        {activeView === 'customers' && (
+          <div className="h-full">
+            <CustomerListTab
+              customers={customers}
+              onUpdateCustomers={setCustomers}
+              onSelectCustomer={(cust) => {
+                const discountRate = (cust.discountRate && cust.discountRate > 0) ? cust.discountRate : receipt.discountRate;
+                const discountType = (cust.discountRate && cust.discountRate > 0) ? 'PERCENT' : receipt.discountType;
+                const totals = calculateTotals(
+                  receipt.items || [],
+                  receipt.taxRate || 0,
+                  discountRate || 0,
+                  discountType || 'PERCENT'
+                );
+                setReceipt((prev) => ({
+                  ...prev,
+                  customerName: cust.name,
+                  discountRate,
+                  discountType,
+                  ...totals,
+                }));
+                setActiveView('generator');
+                showToast(`Pelanggan "${cust.name}" diterapkan ke struk aktif`);
+              }}
+              activeCustomerName={receipt.customerName}
+              currencySymbol={currencySymbol}
+            />
           </div>
         )}
 

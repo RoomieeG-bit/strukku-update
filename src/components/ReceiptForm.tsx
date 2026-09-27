@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Receipt, Item, InventoryItem, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Receipt, Item, InventoryItem, Customer, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
 import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import InventoryTab from './InventoryTab';
@@ -60,7 +60,10 @@ import {
   Boxes,
   Package,
   Calculator,
-  MapPin
+  MapPin,
+  Users,
+  UserPlus,
+  ChevronDown
 } from 'lucide-react';
 
 export type FormTabType = 'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'templates';
@@ -107,6 +110,9 @@ interface ReceiptFormProps {
   defaultStorePhone?: string;
   onSetDefaultStorePhone?: (storePhone: string) => void;
   lastAutosavedAt?: Date | null;
+  customers: Customer[];
+  onUpdateCustomers: (customers: Customer[]) => void;
+  onNavigateToCustomers?: () => void;
 }
 
 // Preset Quick-Add Items for super easy POS simulation
@@ -233,6 +239,9 @@ export default function ReceiptForm({
   defaultStorePhone,
   onSetDefaultStorePhone,
   lastAutosavedAt,
+  customers,
+  onUpdateCustomers,
+  onNavigateToCustomers,
 }: ReceiptFormProps) {
   // Local state for adding a single item
   const [newItemName, setNewItemName] = useState('');
@@ -241,6 +250,27 @@ export default function ReceiptForm({
   const [newItemDiscount, setNewItemDiscount] = useState(0);
   const [activeTab, setActiveTab] = useState<FormTabType>('store');
   const [shortcutFeedback, setShortcutFeedback] = useState<string | null>(null);
+
+  // Find customer matching currently typed receipt customer name
+  const matchedCustomer = useMemo(() => {
+    if (!receipt.customerName || !receipt.customerName.trim()) return null;
+    const clean = receipt.customerName.trim().toLowerCase();
+    return customers.find((c) => c.name.trim().toLowerCase() === clean) || null;
+  }, [customers, receipt.customerName]);
+
+  const selectedCustomerInDropdown = matchedCustomer ? matchedCustomer.id : '';
+
+  // Select a customer from dropdown
+  const handleSelectCustomer = (customer: Customer, autoApplyDiscount: boolean = false) => {
+    const updates: Partial<Receipt> = {
+      customerName: customer.name,
+    };
+    if (autoApplyDiscount && customer.discountRate && customer.discountRate > 0) {
+      updates.discountType = 'PERCENT';
+      updates.discountRate = customer.discountRate;
+    }
+    handleRecalculate(updates);
+  };
 
   // Helper to switch tab smoothly and scroll tab button into view
   const handleSwitchTab = useCallback((newTab: FormTabType, sourceNotice?: string) => {
@@ -1064,7 +1094,7 @@ export default function ReceiptForm({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-medium text-slate-700" htmlFor="store-name-input">
@@ -1173,6 +1203,7 @@ export default function ReceiptForm({
                 )}
               </div>
 
+              {/* Input Nama Pelanggan (Ketik Manual / Hasil Pilih) */}
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="customer-name-input">
                   Nama Pelanggan <span className="text-[10px] text-slate-400 font-normal">(Opsional)</span>
@@ -1187,8 +1218,46 @@ export default function ReceiptForm({
                     value={receipt.customerName || ''}
                     onChange={(e) => handleRecalculate({ customerName: e.target.value })}
                     className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none"
-                    placeholder="Nama Pelanggan"
+                    placeholder="Ketik manual nama pelanggan..."
                   />
+                </div>
+              </div>
+
+              {/* Dropdown di Samping Nama Pelanggan */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1" htmlFor="customer-dropdown-select">
+                  Pilih Pelanggan <span className="text-[10px] text-slate-400 font-normal">(Pilihan Dropdown)</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-sky-600">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  <select
+                    id="customer-dropdown-select"
+                    value={selectedCustomerInDropdown}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        handleRecalculate({ customerName: '' });
+                      } else {
+                        const found = customers.find((c) => c.id === val);
+                        if (found) {
+                          handleSelectCustomer(found, true);
+                        }
+                      }
+                    }}
+                    className="w-full pl-9 pr-8 py-2 border border-slate-200 bg-white rounded-lg text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 outline-none cursor-pointer appearance-none truncate"
+                  >
+                    <option value="">-- Pilih dari Daftar Pelanggan ({customers.length}) --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.category ? `[${c.category}]` : ''} {c.discountRate ? `(${c.discountRate}%)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
             </div>

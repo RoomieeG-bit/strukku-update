@@ -34,7 +34,8 @@ import {
   ChevronDown,
   Plus,
   Minus,
-  FileText
+  FileText,
+  Lock
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -1006,7 +1007,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           }}
         >
           {/* Watermark / Status Stamp Overlay (Natural -18° angle with robust SVG rendering for PNG/JPG/PDF exports) */}
-          {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG'].includes(receipt.paymentStatus) && (
+          {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG', 'REFUND'].includes(receipt.paymentStatus) && (
             <div 
               className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none z-0"
               style={{ opacity: 0.18 }}
@@ -1018,9 +1019,11 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                 style={{
                   color: receipt.paymentStatus === 'SUDAH_LUNAS' 
                     ? '#15803d' 
-                    : receipt.paymentStatus === 'BELUM_LUNAS' 
-                      ? '#b91c1c' 
-                      : '#d97706'
+                    : receipt.paymentStatus === 'REFUND'
+                      ? '#b91c1c'
+                      : receipt.paymentStatus === 'BELUM_LUNAS' 
+                        ? '#b91c1c' 
+                        : '#d97706'
                 }}
               >
                 <g transform="rotate(-18 160 100)">
@@ -1060,7 +1063,13 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
                     dominantBaseline="central" 
                     letterSpacing="3.5"
                   >
-                    {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' : 'HUTANG'}
+                    {receipt.paymentStatus === 'SUDAH_LUNAS' 
+                      ? 'LUNAS' 
+                      : receipt.paymentStatus === 'REFUND'
+                        ? 'REFUND'
+                        : receipt.paymentStatus === 'BELUM_LUNAS' 
+                          ? 'BELUM LUNAS' 
+                          : 'HUTANG'}
                   </text>
                 </g>
               </svg>
@@ -1213,6 +1222,26 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             )}
             {/* Meta Custom Labels */}
             {metaCustomLabels.map(renderCustomLabelItem)}
+
+            {/* Chain Struk (Rantai Struk / Refund Reference) */}
+            {receipt.isChained && (
+              <div className="mt-2 pt-1.5 border-t border-dashed border-red-300 bg-red-50/90 -mx-1 px-2.5 py-1.5 rounded-lg text-red-900 text-[10px] space-y-0.5">
+                <div className="font-extrabold flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <span>⛓️</span>
+                    <span>STRUK BERANTAI</span>
+                  </span>
+                  <span className="bg-red-200 text-red-900 px-1.5 py-0.2 rounded font-bold text-[9px]">
+                    {receipt.paymentStatus === 'REFUND' ? 'REFUND' : 'RANTAI'}
+                  </span>
+                </div>
+                {receipt.parentTransactionId && (
+                  <div className="text-[9px] text-red-700 font-mono">
+                    Ref Struk Asal: #{receipt.parentTransactionId}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Middle Divider */}
@@ -1334,9 +1363,12 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               <span className={`uppercase font-extrabold ${
                 receipt.paymentStatus === 'SUDAH_LUNAS' 
                   ? 'text-green-800' 
-                  : 'text-rose-700'
+                  : receipt.paymentStatus === 'REFUND'
+                    ? 'text-red-700 font-black'
+                    : 'text-rose-700'
               }`}>
                 {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'SUDAH LUNAS' :
+                 receipt.paymentStatus === 'REFUND' ? 'REFUND' :
                  receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' :
                  'HUTANG'}
               </span>
