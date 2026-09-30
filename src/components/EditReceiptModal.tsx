@@ -656,9 +656,71 @@ export default function EditReceiptModal({
 
                 {/* Payment Status */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" /> Status Pelunasan
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" /> Status Pelunasan
+                    </label>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      paymentStatus === 'SUDAH_LUNAS'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : paymentStatus === 'REFUND'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                        : paymentStatus === 'HUTANG'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-orange-100 text-orange-800'
+                    }`}>
+                      {paymentStatus === 'REFUND' ? '↩️ REFUND' : paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : paymentStatus === 'HUTANG' ? 'HUTANG' : 'BELUM LUNAS'}
+                    </span>
+                  </div>
+
+                  {/* Quick Select Buttons */}
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentStatus('SUDAH_LUNAS')}
+                      className={`py-1 rounded-lg text-[11px] font-bold transition border cursor-pointer ${
+                        paymentStatus === 'SUDAH_LUNAS'
+                          ? 'bg-emerald-600 text-white border-emerald-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      Lunas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentStatus('BELUM_LUNAS')}
+                      className={`py-1 rounded-lg text-[11px] font-bold transition border cursor-pointer ${
+                        paymentStatus === 'BELUM_LUNAS'
+                          ? 'bg-orange-600 text-white border-orange-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      Belum
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentStatus('HUTANG')}
+                      className={`py-1 rounded-lg text-[11px] font-bold transition border cursor-pointer ${
+                        paymentStatus === 'HUTANG'
+                          ? 'bg-amber-600 text-white border-amber-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      Hutang
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentStatus('REFUND')}
+                      className={`py-1 rounded-lg text-[11px] font-bold transition border cursor-pointer ${
+                        paymentStatus === 'REFUND'
+                          ? 'bg-rose-600 text-white border-rose-700 ring-1 ring-rose-400'
+                          : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                      }`}
+                    >
+                      Refund
+                    </button>
+                  </div>
+
                   <select
                     value={paymentStatus}
                     onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)}
@@ -667,9 +729,7 @@ export default function EditReceiptModal({
                     <option value="SUDAH_LUNAS">✅ Sudah Lunas (LUNAS)</option>
                     <option value="BELUM_LUNAS">⏳ Belum Lunas (PENDING)</option>
                     <option value="HUTANG">💸 Hutang / Bon (TEMPO)</option>
-                    {(receipt?.isChained || paymentStatus === 'REFUND') && (
-                      <option value="REFUND">↩️ Refund (PENGEMBALIAN DANA)</option>
-                    )}
+                    <option value="REFUND">↩️ Refund (PENGEMBALIAN DANA)</option>
                   </select>
                 </div>
 

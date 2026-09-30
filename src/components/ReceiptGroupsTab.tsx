@@ -555,11 +555,15 @@ export default function ReceiptGroupsTab({
                                       {receipt.paymentMethod}
                                     </span>
                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                                      (receipt.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                                      receipt.paymentStatus === 'REFUND'
+                                        ? 'bg-rose-50 text-rose-700 border border-rose-300'
+                                        : (receipt.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
                                         ? 'bg-green-50 text-green-700 border border-green-100'
                                         : 'bg-rose-50 text-rose-700 border border-rose-100'
                                     }`}>
-                                      {(receipt.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' : 'Belum Lunas'}
+                                      {receipt.paymentStatus === 'REFUND'
+                                        ? '↩️ Refund'
+                                        : (receipt.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' : 'Belum Lunas'}
                                     </span>
                                   </div>
 

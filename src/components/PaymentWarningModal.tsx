@@ -180,11 +180,13 @@ export default function PaymentWarningModal({
               <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
                 paymentStatus === 'SUDAH_LUNAS'
                   ? 'bg-emerald-100 text-emerald-800'
+                  : paymentStatus === 'REFUND'
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
                   : paymentStatus === 'HUTANG'
                   ? 'bg-purple-100 text-purple-800'
-                  : 'bg-rose-100 text-rose-800'
+                  : 'bg-orange-100 text-orange-800'
               }`}>
-                {paymentStatus === 'SUDAH_LUNAS' ? 'Sudah Lunas' : paymentStatus === 'HUTANG' ? 'Hutang' : 'Belum Lunas'}
+                {paymentStatus === 'SUDAH_LUNAS' ? 'Sudah Lunas' : paymentStatus === 'REFUND' ? '↩️ Refund (Pengembalian)' : paymentStatus === 'HUTANG' ? 'Hutang' : 'Belum Lunas'}
               </span>
             </div>
 

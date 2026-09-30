@@ -579,6 +579,7 @@ export function exportReceiptsToCSV(
     let paymentStatusLabel = 'Lunas';
     if (r.paymentStatus === 'BELUM_LUNAS') paymentStatusLabel = 'Belum Lunas';
     else if (r.paymentStatus === 'HUTANG') paymentStatusLabel = 'Hutang / Bon';
+    else if (r.paymentStatus === 'REFUND') paymentStatusLabel = 'Refund';
 
     return [
       escapeCSV(index + 1),
@@ -663,44 +664,4 @@ export function getPaymentDeficit(receipt: Receipt): number {
   }
   return 0;
 }
-
-export const DEFAULT_RECEIPT_CHAIN_CONFIG = {
-  enabled: false,
-  slips: {
-    customer: true,
-    kitchen: true,
-    merchant: false,
-    delivery: false,
-  },
-  orderType: 'DINE_IN' as const,
-  tableNumber: 'Meja 01',
-  kitchenNotes: '',
-  enableAuditHash: true,
-  chainSequence: 1,
-};
-
-/**
- * Computes deterministic cryptographic-style hash for receipt audit chaining
- */
-export function computeReceiptChainHash(receipt: {
-  transactionId: string;
-  dateTime: string;
-  total: number;
-  prevReceiptHash?: string;
-  chainSequence?: number;
-}): string {
-  const seed = `${receipt.prevReceiptHash || '0x0000000000000000'}:${receipt.chainSequence || 1}:${receipt.transactionId}:${receipt.dateTime}:${receipt.total}`;
-  let hash1 = 0x811c9dc5;
-  let hash2 = 0x5b358249;
-  for (let i = 0; i < seed.length; i++) {
-    const char = seed.charCodeAt(i);
-    hash1 ^= char;
-    hash1 = (hash1 * 0x01000193) >>> 0;
-    hash2 = ((hash2 << 5) - hash2 + char) >>> 0;
-  }
-  const hex1 = hash1.toString(16).padStart(8, '0');
-  const hex2 = hash2.toString(16).padStart(8, '0');
-  return `0x${hex1}${hex2}`.toUpperCase();
-}
-
 

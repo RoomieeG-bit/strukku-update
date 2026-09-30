@@ -44,7 +44,7 @@ import {
   Folder,
   FolderPlus,
   FolderOpen,
-  Link2
+  Link as LinkIcon
 } from 'lucide-react';
 import EditReceiptModal from './EditReceiptModal';
 import AddToGroupModal from './AddToGroupModal';
@@ -97,6 +97,7 @@ interface ReceiptHistoryProps {
   onBulkDeleteArchivedReceipts?: (ids: string[]) => void;
   onBulkRestoreTrash?: (ids: string[]) => void;
   onBulkPermanentDeleteTrash?: (ids: string[]) => void;
+  onCreateChainReceipt?: (parentReceipt: Receipt) => void;
   currencySymbol: string;
 }
 
@@ -110,6 +111,7 @@ export default function ReceiptHistory({
   onDeleteGroup,
   onAddReceiptsToGroup,
   onRemoveReceiptFromGroup,
+  onCreateChainReceipt,
   onLoadReceipt,
   onUpdateReceipt,
   onTogglePinReceipt,
@@ -258,6 +260,7 @@ export default function ReceiptHistory({
     const matchesMethod = 
       methodFilter === 'ALL' || 
       (methodFilter === 'PINNED' && (item.isPinned || item.isFavorite)) ||
+      (methodFilter === 'CHAINED' && (item.isChained || history.some((r) => r.parentReceiptId === item.id))) ||
       item.paymentMethod === methodFilter || 
       (item.paymentStatus || 'SUDAH_LUNAS') === methodFilter;
     
@@ -373,6 +376,7 @@ export default function ReceiptHistory({
 
     const matchesMethod = 
       archivedMethodFilter === 'ALL' || 
+      (archivedMethodFilter === 'CHAINED' && (item.isChained || archivedHistory.some((r) => r.parentReceiptId === item.id))) ||
       item.paymentMethod === archivedMethodFilter || 
       (item.paymentStatus || 'SUDAH_LUNAS') === archivedMethodFilter;
 
@@ -1216,6 +1220,8 @@ export default function ReceiptHistory({
                     <option value="SUDAH_LUNAS">✅ Sudah Lunas</option>
                     <option value="BELUM_LUNAS">⏳ Belum Lunas</option>
                     <option value="HUTANG">💸 Hutang</option>
+                    <option value="REFUND">↩️ Refund (Pengembalian)</option>
+                    <option value="CHAINED">⛓️ Semua Struk Berantai</option>
                   </select>
                 </div>
 
@@ -1450,24 +1456,34 @@ export default function ReceiptHistory({
                             {item.paymentMethod}
                           </span>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                            (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                            item.paymentStatus === 'REFUND'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
                               ? 'bg-green-50 text-green-700 border border-green-100'
                               : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
                               ? 'bg-rose-50 text-rose-700 border border-rose-100'
                               : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
                           }`}>
-                            {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                            {item.paymentStatus === 'REFUND' ? '↩️ Refund' :
+                             (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
                              (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
                           </span>
+                          {item.isChained && (
+                            <span 
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1 cursor-pointer hover:bg-amber-100 transition shadow-2xs"
+                              title={`Struk ini terhubung / rantai refund dari #${item.parentTransactionId || 'Induk'}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (item.parentTransactionId) setSearchTerm(item.parentTransactionId);
+                              }}
+                            >
+                              <span>⛓️</span>
+                              <span>Rantai dari #{item.parentTransactionId || 'Asal'}</span>
+                            </span>
+                          )}
                           {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
                             <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
                               {item.fontFamily === 'EAS' ? 'EAS Alert' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit CRT' : item.fontFamily === 'DOT_MATRIX' ? 'Dot Matrix' : item.fontFamily}
-                            </span>
-                          )}
-                          {item.chainConfig?.enabled && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-2xs" title={`Receipt Chaining Aktif: ${Object.values(item.chainConfig.slips).filter(Boolean).length} Slip`}>
-                              <Link2 className="w-2.5 h-2.5 text-indigo-600" />
-                              <span>Chaining ({Object.values(item.chainConfig.slips).filter(Boolean).length})</span>
                             </span>
                           )}
                         </div>
@@ -1546,6 +1562,62 @@ export default function ReceiptHistory({
                             </span>
                           )}
                         </div>
+
+                        {/* Visual Chain Connector: Parent Link */}
+                        {item.isChained && (
+                          <div className="mt-2.5 p-2.5 bg-gradient-to-r from-amber-500/10 via-red-500/5 to-amber-500/10 border-l-4 border-amber-500 rounded-r-xl flex items-center justify-between text-xs text-amber-950">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-600 font-bold">⛓️</span>
+                              <span className="text-[11px] font-medium">
+                                Struk Bersambung (Rantai Refund) dari Struk Asal: <strong className="font-mono text-slate-900">#{item.parentTransactionId}</strong>
+                              </span>
+                            </div>
+                            {item.parentTransactionId && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchTerm(item.parentTransactionId || '');
+                                }}
+                                className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer shrink-0 ml-2"
+                              >
+                                Temukan Struk Asal →
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Visual Chain Connector: Child Chains from Parent */}
+                        {(() => {
+                          const childChains = history.filter((r) => r.parentReceiptId === item.id);
+                          if (childChains.length === 0) return null;
+                          return (
+                            <div className="mt-2.5 p-2.5 bg-purple-500/10 border-l-4 border-purple-500 rounded-r-xl flex items-center justify-between text-xs text-purple-950 flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-purple-600 font-bold">⛓️</span>
+                                <span className="text-[11px] font-medium">
+                                  Telah Dibuatkan Rantai Struk ({childChains.length} Refund)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {childChains.map((c) => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSearchTerm(c.transactionId);
+                                    }}
+                                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-white border border-purple-300 text-purple-900 hover:bg-purple-100 cursor-pointer shadow-2xs"
+                                    title={`Lihat struk rantai refund #${c.transactionId}`}
+                                  >
+                                    ↩️ #{c.transactionId.split('/')[0]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -1573,6 +1645,20 @@ export default function ReceiptHistory({
                             <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-amber-600 text-amber-800' : 'text-slate-400'}`} />
                             <span className="hidden sm:inline">{isPinned ? 'Tersemat' : 'Pin'}</span>
                           </button>
+
+                          {/* Buat Rantai Struk Button */}
+                          {onCreateChainReceipt && !item.isDraft && (
+                            <button
+                              type="button"
+                              onClick={() => onCreateChainReceipt(item)}
+                              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Buat rantai struk baru (misal refund / koreksi) bersambung dari struk ini di Generator"
+                              id={`btn-chain-receipt-${item.id}`}
+                            >
+                              <LinkIcon className="w-3.5 h-3.5 text-amber-700" />
+                              <span className="hidden sm:inline">Rantai</span>
+                            </button>
+                          )}
 
                           {/* Arsipkan Struk Button */}
                           <button
@@ -1675,24 +1761,34 @@ export default function ReceiptHistory({
                               {item.paymentMethod}
                             </span>
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                              item.paymentStatus === 'REFUND'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                 : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
                                 ? 'bg-rose-50 text-rose-700 border border-rose-100'
                                 : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
                             }`}>
-                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                              {item.paymentStatus === 'REFUND' ? '↩️ Refund' :
+                               (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
                                (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
                             </span>
+                            {item.isChained && (
+                              <span 
+                                className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1 cursor-pointer hover:bg-amber-100 transition shadow-2xs"
+                                title={`Struk berantai dari #${item.parentTransactionId || 'Induk'}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (item.parentTransactionId) setSearchTerm(item.parentTransactionId);
+                                }}
+                              >
+                                <span>⛓️</span>
+                                <span>Rantai</span>
+                              </span>
+                            )}
                             {item.fontFamily && item.fontFamily !== 'DEFAULT' && (
                               <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 truncate max-w-[90px]">
                                 {item.fontFamily === 'EAS' ? 'EAS' : item.fontFamily === 'RETRO_TERMINAL' ? '8-Bit' : item.fontFamily === 'DOT_MATRIX' ? 'Dot' : item.fontFamily}
-                              </span>
-                            )}
-                            {item.chainConfig?.enabled && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-200 flex items-center gap-1 shadow-2xs" title={`Receipt Chaining Aktif: ${Object.values(item.chainConfig.slips).filter(Boolean).length} Slip`}>
-                                <Link2 className="w-2.5 h-2.5 text-indigo-700" />
-                                <span>Chaining ({Object.values(item.chainConfig.slips).filter(Boolean).length})</span>
                               </span>
                             )}
                           </div>
@@ -1763,6 +1859,55 @@ export default function ReceiptHistory({
                             )}
                           </div>
                         </div>
+
+                        {/* Chain Connector Box in Grid Card */}
+                        {item.isChained && (
+                          <div className="mb-2.5 p-2 bg-gradient-to-r from-amber-500/10 to-red-500/10 border-l-4 border-amber-500 rounded-r-lg text-[10px] text-amber-950 flex items-center justify-between">
+                            <span className="font-semibold truncate">
+                              ⛓️ Bersambung dari: <strong className="font-mono">#{item.parentTransactionId}</strong>
+                            </span>
+                            {item.parentTransactionId && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchTerm(item.parentTransactionId || '');
+                                }}
+                                className="text-amber-800 hover:text-amber-950 underline font-bold shrink-0 ml-1 cursor-pointer"
+                              >
+                                Temukan →
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Child Chain Indicator if parent has refunds */}
+                        {(() => {
+                          const childChains = history.filter((r) => r.parentReceiptId === item.id);
+                          if (childChains.length === 0) return null;
+                          return (
+                            <div className="mb-2.5 p-2 bg-purple-500/10 border-l-4 border-purple-500 rounded-r-lg text-[10px] text-purple-950 flex items-center justify-between flex-wrap gap-1">
+                              <span className="font-semibold">
+                                ⛓️ {childChains.length} Rantai Refund
+                              </span>
+                              <div className="flex gap-1 flex-wrap">
+                                {childChains.map((c) => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSearchTerm(c.transactionId);
+                                    }}
+                                    className="font-mono font-bold px-1.5 py-0.2 rounded bg-white border border-purple-200 text-purple-900 hover:bg-purple-100 cursor-pointer"
+                                  >
+                                    #{c.transactionId.split('/')[0]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Card Bottom: Total Amount and Action Grid */}
@@ -1774,7 +1919,7 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-5 gap-1.5">
+                        <div className={`grid ${onCreateChainReceipt && !item.isDraft ? 'grid-cols-6' : 'grid-cols-5'} gap-1.5`}>
                           <button
                             type="button"
                             onClick={() => onTogglePinReceipt?.(item.id)}
@@ -1787,6 +1932,19 @@ export default function ReceiptHistory({
                           >
                             <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-amber-600 text-amber-800' : 'text-slate-500'}`} />
                           </button>
+
+                          {/* Buat Rantai Struk Button in Grid */}
+                          {onCreateChainReceipt && !item.isDraft && (
+                            <button
+                              type="button"
+                              onClick={() => onCreateChainReceipt(item)}
+                              className="py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/90 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Buat rantai struk refund bersambung dari struk ini"
+                              id={`btn-grid-chain-receipt-${item.id}`}
+                            >
+                              <LinkIcon className="w-3.5 h-3.5 text-amber-700" />
+                            </button>
+                          )}
 
                           <button
                             type="button"
@@ -2593,6 +2751,8 @@ export default function ReceiptHistory({
                     <option value="SUDAH_LUNAS">Sudah Lunas</option>
                     <option value="BELUM_LUNAS">Belum Lunas</option>
                     <option value="HUTANG">Hutang / Bon</option>
+                    <option value="REFUND">↩️ Refund (Pengembalian)</option>
+                    <option value="CHAINED">⛓️ Semua Struk Berantai</option>
                   </select>
 
                   {(archivedSearchTerm || archivedMethodFilter !== 'ALL') && (
@@ -2748,13 +2908,16 @@ export default function ReceiptHistory({
                             </span>
 
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' 
+                              item.paymentStatus === 'REFUND'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-300'
+                                : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' 
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
                                 : (item.paymentStatus || 'SUDAH_LUNAS') === 'HUTANG'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : 'bg-rose-50 text-rose-700 border border-rose-200'
                             }`}>
-                              {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                              {item.paymentStatus === 'REFUND' ? '↩️ Refund' :
+                               (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
                                (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
                             </span>
                           </div>
@@ -2912,13 +3075,16 @@ export default function ReceiptHistory({
                             {item.paymentMethod}
                           </span>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                            item.paymentStatus === 'REFUND'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-300'
+                              : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                               : (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS'
                               ? 'bg-rose-50 text-rose-700 border border-rose-100'
                               : 'bg-yellow-50 text-yellow-700 border border-yellow-100'
                           }`}>
-                            {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
+                            {item.paymentStatus === 'REFUND' ? '↩️ Refund' :
+                             (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' :
                              (item.paymentStatus || 'SUDAH_LUNAS') === 'BELUM_LUNAS' ? 'Belum Lunas' : 'Hutang'}
                           </span>
                         </div>
@@ -3312,11 +3478,15 @@ export default function ReceiptHistory({
                             {item.paymentMethod}
                           </span>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                            (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
+                            item.paymentStatus === 'REFUND'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-300'
+                              : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS'
                               ? 'bg-green-50 text-green-700 border border-green-100'
                               : 'bg-rose-50 text-rose-700 border border-rose-100'
                           }`}>
-                            {(item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' : 'Belum Lunas'}
+                            {item.paymentStatus === 'REFUND'
+                              ? '↩️ Refund'
+                              : (item.paymentStatus || 'SUDAH_LUNAS') === 'SUDAH_LUNAS' ? 'Lunas' : 'Belum Lunas'}
                           </span>
                           
                           {/* Deleted Timestamp */}
