@@ -252,16 +252,29 @@ export default function CustomerListTab({
 
   // Export to JSON
   const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(customers, null, 2));
+    if (!customers || customers.length === 0) {
+      showFeedback('Tidak ada data pelanggan untuk diekspor.');
+      return;
+    }
+    const jsonString = JSON.stringify(customers, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute('href', dataStr);
-    dlAnchorElem.setAttribute('download', `customer_list_${new Date().toISOString().slice(0, 10)}.json`);
+    dlAnchorElem.href = url;
+    dlAnchorElem.download = `customer_list_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
-    showFeedback('Daftar pelanggan berhasil diekspor ke format JSON!');
+    document.body.removeChild(dlAnchorElem);
+    URL.revokeObjectURL(url);
+    showFeedback(`Berhasil mengekspor ${customers.length} data pelanggan ke format JSON (.json)!`);
   };
 
   // Export to CSV
   const handleExportCSV = () => {
+    if (!customers || customers.length === 0) {
+      showFeedback('Tidak ada data pelanggan untuk diekspor.');
+      return;
+    }
     const headers = ['ID', 'Nama', 'Kategori', 'No. Member', 'Telepon', 'Email', 'Diskon (%)', 'Alamat', 'Catatan'];
     const rows = customers.map((c) => [
       c.id,
@@ -280,46 +293,161 @@ export default function CustomerListTab({
     const link = document.createElement('a');
     link.href = url;
     link.download = `customer_list_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showFeedback('Daftar pelanggan berhasil diekspor ke format CSV!');
+    showFeedback(`Berhasil mengekspor ${customers.length} data pelanggan ke format CSV (.csv)!`);
   };
 
-  // Import JSON file
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import JSON file (with CSV fallback for maximum compatibility)
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
+      const content = (event.target?.result as string) || '';
+      if (!content.trim()) {
+        showFeedback('File kosong. Tidak ada data yang diimpor.');
+        return;
+      }
+
+      // Try parsing as JSON first
       try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (Array.isArray(parsed)) {
-          const validated = parsed
-            .filter((item) => item && typeof item.name === 'string' && item.name.trim())
-            .map((item) => ({
+        const parsed = JSON.parse(content);
+        const customerArray = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.customers)
+          ? parsed.customers
+          : Array.isArray(parsed?.data)
+          ? parsed.data
+          : null;
+
+        if (customerArray && Array.isArray(customerArray)) {
+          const validated: Customer[] = customerArray
+            .filter((item: any) => item && typeof item.name === 'string' && item.name.trim())
+            .map((item: any) => ({
               id: item.id || `cust-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               name: item.name.trim(),
-              phone: item.phone || undefined,
-              email: item.email || undefined,
-              memberId: item.memberId || undefined,
-              category: item.category || 'Reguler',
-              discountRate: typeof item.discountRate === 'number' ? item.discountRate : undefined,
-              address: item.address || undefined,
-              notes: item.notes || undefined,
+              phone: item.phone ? String(item.phone).trim() : undefined,
+              email: item.email ? String(item.email).trim() : undefined,
+              memberId: item.memberId ? String(item.memberId).trim() : undefined,
+              category: item.category ? String(item.category).trim() : 'Reguler',
+              discountRate:
+                typeof item.discountRate === 'number'
+                  ? item.discountRate
+                  : !isNaN(parseFloat(item.discountRate))
+                  ? parseFloat(item.discountRate)
+                  : undefined,
+              address: item.address ? String(item.address).trim() : undefined,
+              notes: item.notes ? String(item.notes).trim() : undefined,
               createdAt: item.createdAt || new Date().toISOString(),
             }));
 
           if (validated.length > 0) {
             onUpdateCustomers(validated);
-            showFeedback(`${validated.length} pelanggan berhasil diimpor dari file JSON!`);
-          } else {
-            showFeedback('File JSON tidak memuat data pelanggan yang valid.');
+            showFeedback(`${validated.length} data pelanggan berhasil diimpor dari file JSON!`);
+            return;
           }
         }
-      } catch (err) {
-        console.error('Error importing customers JSON:', err);
-        showFeedback('Gagal membaca file JSON. Pastikan format file sesuai.');
+      } catch (_jsonErr) {
+        // Not valid JSON, try CSV fallback below
       }
+
+      // Fallback: parse CSV if user uploaded CSV file
+      try {
+        const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+        if (lines.length > 1) {
+          const parseCSVLine = (line: string): string[] => {
+            const values: string[] = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+              if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                  current += '"';
+                  i++;
+                } else {
+                  inQuotes = !inQuotes;
+                }
+              } else if (char === ',' && !inQuotes) {
+                values.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+            values.push(current.trim());
+            return values;
+          };
+
+          const rawHeader = parseCSVLine(lines[0]);
+          const header = rawHeader.map((h) => h.replace(/^["']|["']$/g, '').trim().toLowerCase());
+
+          const nameIndex = header.findIndex((h) => h.includes('nama') || h.includes('name'));
+          const idIndex = header.findIndex((h) => h === 'id');
+          const catIndex = header.findIndex((h) => h.includes('kategori') || h.includes('category'));
+          const memberIndex = header.findIndex((h) => h.includes('member'));
+          const phoneIndex = header.findIndex((h) => h.includes('telepon') || h.includes('phone') || h.includes('hp'));
+          const emailIndex = header.findIndex((h) => h.includes('email'));
+          const discIndex = header.findIndex((h) => h.includes('diskon') || h.includes('discount'));
+          const addrIndex = header.findIndex((h) => h.includes('alamat') || h.includes('address'));
+          const notesIndex = header.findIndex((h) => h.includes('catatan') || h.includes('note'));
+
+          const parsedFromCsv: Customer[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = parseCSVLine(lines[i]);
+            const name = (nameIndex >= 0 ? cols[nameIndex] : cols[1])?.replace(/^["']|["']$/g, '').trim();
+            if (!name) continue;
+
+            const discountRaw = discIndex >= 0 ? cols[discIndex]?.replace(/^["']|["']$/g, '') : cols[6];
+            const parsedDiscount = parseFloat(discountRaw);
+
+            parsedFromCsv.push({
+              id:
+                (idIndex >= 0 && cols[idIndex] ? cols[idIndex].replace(/^["']|["']$/g, '').trim() : '') ||
+                `cust-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              name,
+              category:
+                (catIndex >= 0 && cols[catIndex] ? cols[catIndex].replace(/^["']|["']$/g, '').trim() : 'Reguler') ||
+                'Reguler',
+              memberId:
+                memberIndex >= 0 && cols[memberIndex]
+                  ? cols[memberIndex].replace(/^["']|["']$/g, '').trim() || undefined
+                  : undefined,
+              phone:
+                phoneIndex >= 0 && cols[phoneIndex]
+                  ? cols[phoneIndex].replace(/^["']|["']$/g, '').trim() || undefined
+                  : undefined,
+              email:
+                emailIndex >= 0 && cols[emailIndex]
+                  ? cols[emailIndex].replace(/^["']|["']$/g, '').trim() || undefined
+                  : undefined,
+              discountRate: !isNaN(parsedDiscount) && parsedDiscount > 0 ? parsedDiscount : undefined,
+              address:
+                addrIndex >= 0 && cols[addrIndex]
+                  ? cols[addrIndex].replace(/^["']|["']$/g, '').trim() || undefined
+                  : undefined,
+              notes:
+                notesIndex >= 0 && cols[notesIndex]
+                  ? cols[notesIndex].replace(/^["']|["']$/g, '').trim() || undefined
+                  : undefined,
+              createdAt: new Date().toISOString(),
+            });
+          }
+
+          if (parsedFromCsv.length > 0) {
+            onUpdateCustomers(parsedFromCsv);
+            showFeedback(`${parsedFromCsv.length} data pelanggan berhasil diimpor dari file CSV!`);
+            return;
+          }
+        }
+      } catch (_csvErr) {
+        // Fallback failed
+      }
+
+      showFeedback('Gagal membaca file. Pastikan file berformat JSON pelanggan yang valid.');
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -416,29 +544,45 @@ export default function CustomerListTab({
               <span>Tambah Pelanggan Baru</span>
             </button>
 
+            {/* Ekspor JSON */}
             <button
               type="button"
-              onClick={handleExportCSV}
-              className="p-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer"
-              title="Ekspor CSV"
+              onClick={handleExportJSON}
+              className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              title="Ekspor daftar pelanggan ke file JSON (.json)"
+              id="btn-export-customers-json"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-sky-600" />
+              <span>Ekspor JSON</span>
             </button>
 
+            {/* Impor JSON */}
             <label
               htmlFor="import-customer-json"
-              className="p-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer"
-              title="Impor JSON"
+              className="px-3 py-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              title="Impor daftar pelanggan dari file JSON (.json)"
+              id="btn-import-customers-json"
             >
-              <Upload className="w-3.5 h-3.5" />
+              <Upload className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Impor JSON</span>
               <input
                 type="file"
                 id="import-customer-json"
-                accept=".json"
-                onChange={handleImportJSON}
+                accept=".json,.csv"
+                onChange={handleImportFile}
                 className="hidden"
               />
             </label>
+
+            {/* Ekspor CSV Opsional untuk spreadsheet */}
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="p-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-xl text-xs font-medium transition cursor-pointer"
+              title="Ekspor alternatif ke format CSV (Excel)"
+            >
+              <span className="text-[10px] font-mono font-bold">CSV</span>
+            </button>
           </div>
         </div>
 
@@ -556,6 +700,21 @@ export default function CustomerListTab({
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Muat Contoh Pelanggan</span>
             </button>
+            <label
+              htmlFor="import-customer-empty-json"
+              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+              title="Impor data pelanggan dari file JSON"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Impor JSON</span>
+              <input
+                type="file"
+                id="import-customer-empty-json"
+                accept=".json,.csv"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+            </label>
           </div>
         </div>
       ) : (

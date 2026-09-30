@@ -4,7 +4,7 @@
  */
 
 export type PaymentMethod = 'CASH' | 'DEBIT' | 'CREDIT' | 'QRIS' | 'E-WALLET';
-export type PaymentStatus = 'SUDAH_LUNAS' | 'BELUM_LUNAS' | 'HUTANG';
+export type PaymentStatus = 'SUDAH_LUNAS' | 'BELUM_LUNAS' | 'HUTANG' | 'REFUND';
 export type CodeDisplayType = 'QR' | 'BARCODE' | 'BOTH' | 'NONE';
 export type ReceiptFontFamily = 
   | 'DEFAULT'          // JetBrains Mono (Thermal Standard)
@@ -138,6 +138,9 @@ export interface Receipt {
   deletedAt?: string; // ISO string when receipt was moved to trash
   isDraft?: boolean; // Saved as draft in ledger
   draftSavedAt?: string; // ISO string when receipt draft was autosaved
+  isChained?: boolean; // True if this receipt was generated as part of a transaction chain
+  parentTransactionId?: string; // Reference to original transaction ID
+  parentReceiptId?: string; // Reference to original parent receipt ID
 }
 
 export interface ReceiptGroup {

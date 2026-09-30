@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset, CustomLabel } from '../types';
+import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset, CustomLabel, ReceiptChainConfig } from '../types';
 import { 
   formatCurrency, 
   formatDateTime, 
@@ -13,12 +13,15 @@ import {
   PAPER_SIZE_OPTIONS, 
   getPaperWidthMm, 
   getReceiptLabels,
-  isPaymentInsufficient 
+  isPaymentInsufficient,
+  computeReceiptChainHash
 } from '../utils';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { QRCodeSVG } from 'qrcode.react';
 import PaymentWarningModal, { ActionType } from './PaymentWarningModal';
+import ReceiptChainSettingsModal from './ReceiptChainSettingsModal';
+import ChainedSlipsRenderer, { KitchenSlip, MerchantSlip, DeliverySlip } from './ChainedSlipsRenderer';
 import { 
   Printer, 
   Download, 
@@ -31,11 +34,15 @@ import {
   Type, 
   Maximize2, 
   Sliders, 
-  ChevronDown,
-  Plus,
-  Minus,
+  ChevronDown, 
+  Plus, 
+  Minus, 
   FileText,
-  Lock
+  Link2,
+  Layers,
+  Utensils,
+  FileCheck2,
+  Truck
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -428,7 +435,34 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
   const [exporting, setExporting] = useState<string | null>(null);
   const [copiedTx, setCopiedTx] = useState(false);
   const [showCustomSizeModal, setShowCustomSizeModal] = useState(false);
+  const [showChainModal, setShowChainModal] = useState(false);
+  const [activeSlipTab, setActiveSlipTab] = useState<'ALL' | 'CUSTOMER' | 'KITCHEN' | 'MERCHANT' | 'DELIVERY'>('ALL');
   const [pendingWarningAction, setPendingWarningAction] = useState<ActionType | null>(null);
+
+  const chainConfig: ReceiptChainConfig = receipt.chainConfig || {
+    enabled: false,
+    slips: {
+      customer: true,
+      kitchen: true,
+      merchant: false,
+      delivery: false,
+    },
+    orderType: 'DINE_IN',
+    tableNumber: 'Meja 01',
+    kitchenNotes: '',
+    enableAuditHash: true,
+    chainSequence: 1,
+  };
+
+  const chainHash = receipt.chainHash || computeReceiptChainHash({
+    transactionId: receipt.transactionId,
+    dateTime: receipt.dateTime,
+    total: receipt.total,
+    prevReceiptHash: receipt.prevReceiptHash,
+    chainSequence: chainConfig.chainSequence,
+  });
+
+  const totalActiveSlips = Object.values(chainConfig.slips).filter(Boolean).length;
 
   const labels = getReceiptLabels(receipt.labels);
 
@@ -771,6 +805,30 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             </div>
           )}
 
+          {/* Quick Receipt Chaining Modal Button */}
+          <button
+            type="button"
+            onClick={() => setShowChainModal(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+              chainConfig.enabled
+                ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs ring-2 ring-indigo-400/20'
+                : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+            }`}
+            title="Atur Cetak Berantai Multi-Slip (Receipt Chaining)"
+            id="toggle-receipt-chaining-btn"
+          >
+            <Link2 className="w-3.5 h-3.5 text-indigo-300" />
+            <span className="hidden sm:inline">Chaining</span>
+            <span className="sm:hidden">Rantai</span>
+            {chainConfig.enabled ? (
+              <span className="bg-white text-indigo-900 text-[10px] font-black px-1.5 py-0.2 rounded-full font-mono">
+                {totalActiveSlips}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400">Off</span>
+            )}
+          </button>
+
           <div className="flex gap-1.5 ml-auto sm:ml-0">
             <button
               type="button"
@@ -819,11 +877,104 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
       </div>
 
       {/* Main Preview Frame */}
-      <div className="flex-1 overflow-y-auto bg-studio-stage border border-slate-200/90 rounded-2xl p-4 sm:p-7 flex justify-center items-start min-h-[460px] relative shadow-inner">
+      <div className="flex-1 overflow-y-auto bg-studio-stage border border-slate-200/90 rounded-2xl p-4 sm:p-7 flex flex-col items-center justify-start min-h-[460px] relative shadow-inner">
         {exporting && (
           <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-xs flex flex-col justify-center items-center z-50 rounded-2xl text-white font-semibold text-xs gap-2">
             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             Menyiapkan Ekspor {exporting}...
+          </div>
+        )}
+
+        {/* Chaining Sub-bar Selector (Shown when Receipt Chaining is enabled) */}
+        {chainConfig.enabled && (
+          <div className="w-full max-w-md mx-auto mb-4 bg-slate-900/95 backdrop-blur-xs border border-slate-800 p-1.5 rounded-2xl flex flex-wrap items-center justify-between gap-1 shadow-lg z-10 animate-fadeIn">
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 max-w-full">
+              <button
+                type="button"
+                onClick={() => setActiveSlipTab('ALL')}
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                  activeSlipTab === 'ALL'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+                title="Tampilkan seluruh lembar berantai dalam satu gulungan kertas thermal"
+              >
+                <Layers className="w-3 h-3 text-indigo-300" />
+                <span>Semua ({totalActiveSlips})</span>
+              </button>
+
+              {chainConfig.slips.customer && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSlipTab('CUSTOMER')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer ${
+                    activeSlipTab === 'CUSTOMER'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Hanya lembar struk pelanggan"
+                >
+                  👤 Pelanggan
+                </button>
+              )}
+
+              {chainConfig.slips.kitchen && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSlipTab('KITCHEN')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                    activeSlipTab === 'KITCHEN'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Hanya lembar tiket pesanan dapur / bar"
+                >
+                  <Utensils className="w-3 h-3 text-amber-300" />
+                  <span>Dapur</span>
+                </button>
+              )}
+
+              {chainConfig.slips.merchant && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSlipTab('MERCHANT')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                    activeSlipTab === 'MERCHANT'
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Hanya lembar salinan toko / arsip kasir"
+                >
+                  <FileCheck2 className="w-3 h-3 text-emerald-300" />
+                  <span>Kasir</span>
+                </button>
+              )}
+
+              {chainConfig.slips.delivery && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSlipTab('DELIVERY')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                    activeSlipTab === 'DELIVERY'
+                      ? 'bg-sky-600 text-white shadow-2xs'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title="Hanya lembar surat jalan / resi pengantaran"
+                >
+                  <Truck className="w-3 h-3 text-sky-300" />
+                  <span>Surat Jalan</span>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowChainModal(true)}
+              className="text-[10px] text-indigo-300 hover:text-white font-bold px-2 py-1 rounded-lg hover:bg-slate-800 flex items-center gap-1 transition cursor-pointer shrink-0"
+              title="Buka pengaturan lembar rantai struk"
+            >
+              ⚙️ Atur Rantai
+            </button>
           </div>
         )}
 
@@ -1006,80 +1157,105 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             maxWidth: `${previewMaxWidthPx}px`
           }}
         >
-          {/* Watermark / Status Stamp Overlay (Natural -18° angle with robust SVG rendering for PNG/JPG/PDF exports) */}
-          {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG', 'REFUND'].includes(receipt.paymentStatus) && (
-            <div 
-              className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none z-0"
-              style={{ opacity: 0.18 }}
-              id="receipt-status-watermark"
-            >
-              <svg 
-                viewBox="0 0 320 200" 
-                className="w-72 h-44 overflow-visible"
-                style={{
-                  color: receipt.paymentStatus === 'SUDAH_LUNAS' 
-                    ? '#15803d' 
-                    : receipt.paymentStatus === 'REFUND'
-                      ? '#b91c1c'
-                      : receipt.paymentStatus === 'BELUM_LUNAS' 
-                        ? '#b91c1c' 
-                        : '#d97706'
-                }}
-              >
-                <g transform="rotate(-18 160 100)">
-                  {/* Outer Stamp Box with Rounded Corners and Bold Border */}
-                  <rect 
-                    x="20" 
-                    y="62" 
-                    width="280" 
-                    height="76" 
-                    rx="10" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="5" 
-                  />
-                  {/* Inner dashed accent border for authentic rubber stamp effect */}
-                  <rect 
-                    x="27" 
-                    y="69" 
-                    width="266" 
-                    height="62" 
-                    rx="7" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="1.5" 
-                    strokeDasharray="4 2"
-                    opacity="0.6"
-                  />
-                  {/* Stamp Text */}
-                  <text 
-                    x="160" 
-                    y="101" 
-                    fill="currentColor" 
-                    fontSize={receipt.paymentStatus === 'BELUM_LUNAS' ? '26' : '34'} 
-                    fontWeight="900" 
-                    fontFamily={getFontFamilyCss(receipt.fontFamily)}
-                    textAnchor="middle" 
-                    dominantBaseline="central" 
-                    letterSpacing="3.5"
-                  >
-                    {receipt.paymentStatus === 'SUDAH_LUNAS' 
-                      ? 'LUNAS' 
-                      : receipt.paymentStatus === 'REFUND'
-                        ? 'REFUND'
+          {activeSlipTab === 'KITCHEN' ? (
+            <KitchenSlip receipt={receipt} config={chainConfig} />
+          ) : activeSlipTab === 'MERCHANT' ? (
+            <MerchantSlip receipt={receipt} currencySymbol={currencySymbol} config={chainConfig} />
+          ) : activeSlipTab === 'DELIVERY' ? (
+            <DeliverySlip receipt={receipt} />
+          ) : activeSlipTab === 'ALL' && chainConfig.enabled && !chainConfig.slips.customer ? (
+            <ChainedSlipsRenderer
+              receipt={{ ...receipt, chainHash }}
+              currencySymbol={currencySymbol}
+              config={chainConfig}
+              activeFilter="ALL"
+            />
+          ) : (
+            <>
+              {/* Watermark / Status Stamp Overlay (Natural -18° angle with robust SVG rendering for PNG/JPG/PDF exports) */}
+              {['BELUM_LUNAS', 'SUDAH_LUNAS', 'HUTANG'].includes(receipt.paymentStatus) && (
+                <div 
+                  className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden select-none z-0"
+                  style={{ opacity: 0.18 }}
+                  id="receipt-status-watermark"
+                >
+                  <svg 
+                    viewBox="0 0 320 200" 
+                    className="w-72 h-44 overflow-visible"
+                    style={{
+                      color: receipt.paymentStatus === 'SUDAH_LUNAS' 
+                        ? '#15803d' 
                         : receipt.paymentStatus === 'BELUM_LUNAS' 
-                          ? 'BELUM LUNAS' 
-                          : 'HUTANG'}
-                  </text>
-                </g>
-              </svg>
-            </div>
-          )}
+                          ? '#b91c1c' 
+                          : '#d97706'
+                    }}
+                  >
+                    <g transform="rotate(-18 160 100)">
+                      {/* Outer Stamp Box with Rounded Corners and Bold Border */}
+                      <rect 
+                        x="20" 
+                        y="62" 
+                        width="280" 
+                        height="76" 
+                        rx="10" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="5" 
+                      />
+                      {/* Inner dashed accent border for authentic rubber stamp effect */}
+                      <rect 
+                        x="27" 
+                        y="69" 
+                        width="266" 
+                        height="62" 
+                        rx="7" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="1.5" 
+                        strokeDasharray="4 2"
+                        opacity="0.6"
+                      />
+                      {/* Stamp Text */}
+                      <text 
+                        x="160" 
+                        y="101" 
+                        fill="currentColor" 
+                        fontSize={receipt.paymentStatus === 'BELUM_LUNAS' ? '26' : '34'} 
+                        fontWeight="900" 
+                        fontFamily={getFontFamilyCss(receipt.fontFamily)}
+                        textAnchor="middle" 
+                        dominantBaseline="central" 
+                        letterSpacing="3.5"
+                      >
+                        {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'LUNAS' : receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' : 'HUTANG'}
+                      </text>
+                    </g>
+                  </svg>
+                </div>
+              )}
 
-          {/* Feed Header Space */}
-          <div className="border-t-2 border-dashed border-slate-300 w-full mb-4 self-center" />
+              {/* Feed Header Space */}
+              <div className="border-t-2 border-dashed border-slate-300 w-full mb-4 self-center" />
 
-          {/* Slogan / Slogan Header */}
+              {/* Receipt Chaining Header Badge */}
+              {chainConfig.enabled && (
+                <div className="text-center mb-3 pb-2 border-b-2 border-dashed border-black select-none">
+                  <span className="text-[10px] font-black uppercase tracking-wider block bg-black text-white px-2 py-0.5 rounded-sm mx-auto mb-1 max-w-[240px]">
+                    RANTAI 1 DARI {totalActiveSlips} • STRUK PELANGGAN
+                  </span>
+                  {chainConfig.tableNumber && (
+                    <span className="text-xs font-black block mt-1 uppercase text-slate-900">
+                      {chainConfig.orderType === 'TAKE_AWAY' 
+                        ? '🥡 TAKE AWAY' 
+                        : chainConfig.orderType === 'DELIVERY' 
+                          ? '🛵 DELIVERY' 
+                          : '🍽️ DINE IN'} • {chainConfig.tableNumber}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Slogan / Slogan Header */}
           {receipt.notesHeader && (
             <div className="text-center text-slate-600 mb-2 font-medium break-words uppercase">
               {receipt.notesHeader}
@@ -1222,26 +1398,6 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             )}
             {/* Meta Custom Labels */}
             {metaCustomLabels.map(renderCustomLabelItem)}
-
-            {/* Chain Struk (Rantai Struk / Refund Reference) */}
-            {receipt.isChained && (
-              <div className="mt-2 pt-1.5 border-t border-dashed border-red-300 bg-red-50/90 -mx-1 px-2.5 py-1.5 rounded-lg text-red-900 text-[10px] space-y-0.5">
-                <div className="font-extrabold flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <span>⛓️</span>
-                    <span>STRUK BERANTAI</span>
-                  </span>
-                  <span className="bg-red-200 text-red-900 px-1.5 py-0.2 rounded font-bold text-[9px]">
-                    {receipt.paymentStatus === 'REFUND' ? 'REFUND' : 'RANTAI'}
-                  </span>
-                </div>
-                {receipt.parentTransactionId && (
-                  <div className="text-[9px] text-red-700 font-mono">
-                    Ref Struk Asal: #{receipt.parentTransactionId}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Middle Divider */}
@@ -1363,12 +1519,9 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               <span className={`uppercase font-extrabold ${
                 receipt.paymentStatus === 'SUDAH_LUNAS' 
                   ? 'text-green-800' 
-                  : receipt.paymentStatus === 'REFUND'
-                    ? 'text-red-700 font-black'
-                    : 'text-rose-700'
+                  : 'text-rose-700'
               }`}>
                 {receipt.paymentStatus === 'SUDAH_LUNAS' ? 'SUDAH LUNAS' :
-                 receipt.paymentStatus === 'REFUND' ? 'REFUND' :
                  receipt.paymentStatus === 'BELUM_LUNAS' ? 'BELUM LUNAS' :
                  'HUTANG'}
               </span>
@@ -1391,6 +1544,23 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             {paymentCustomLabels.map(renderCustomLabelItem)}
           </div>
 
+          {/* Cryptographic Chain Sequence & Hash */}
+          {chainConfig.enabled && chainConfig.enableAuditHash && (
+            <div className="my-2.5 p-2 bg-slate-50 border border-dashed border-slate-400 text-[8.5px] font-mono text-slate-800 space-y-0.5 select-none">
+              <div className="flex justify-between font-bold">
+                <span className="flex items-center gap-1">
+                  <Link2 className="w-2.5 h-2.5 text-slate-700" />
+                  RANTAI TRANSAKSI:
+                </span>
+                <span>#{String(chainConfig.chainSequence || 1).padStart(4, '0')}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 truncate">
+                <span>BLOCK HASH:</span>
+                <span className="font-bold">{chainHash}</span>
+              </div>
+            </div>
+          )}
+
           {/* Barcode & QR Code Section */}
           {renderBarcodeAndQr()}
 
@@ -1410,6 +1580,18 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
 
           {/* Feed Footer Cut */}
           <div className="mb-4" />
+
+              {/* Chained Slips in Continuous Stream when 'ALL' */}
+              {activeSlipTab === 'ALL' && chainConfig.enabled && (
+                <ChainedSlipsRenderer
+                  receipt={{ ...receipt, chainHash }}
+                  currencySymbol={currencySymbol}
+                  config={chainConfig}
+                  activeFilter="ALL"
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -1432,6 +1614,21 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
         paymentMethod={receipt.paymentMethod}
         paymentStatus={receipt.paymentStatus || 'SUDAH_LUNAS'}
         currencySymbol={currencySymbol}
+      />
+
+      {/* Receipt Chain Settings Modal */}
+      <ReceiptChainSettingsModal
+        isOpen={showChainModal}
+        onClose={() => setShowChainModal(false)}
+        chainConfig={chainConfig}
+        onUpdateConfig={(updatedConfig) => {
+          if (onUpdateReceipt) {
+            onUpdateReceipt({
+              chainConfig: updatedConfig,
+            });
+          }
+        }}
+        transactionId={receipt.transactionId}
       />
     </div>
   );

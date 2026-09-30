@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Receipt, Item, InventoryItem, Customer, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient } from '../utils';
+import { Receipt, Item, InventoryItem, Customer, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont, ReceiptChainConfig } from '../types';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient, DEFAULT_RECEIPT_CHAIN_CONFIG, computeReceiptChainHash } from '../utils';
 import { QRCodeSVG } from 'qrcode.react';
 import InventoryTab from './InventoryTab';
 import CashierCalculatorTab from './CashierCalculatorTab';
@@ -63,10 +63,15 @@ import {
   MapPin,
   Users,
   UserPlus,
-  ChevronDown
+  ChevronDown,
+  Link2,
+  Utensils,
+  FileCheck2,
+  Truck,
+  Scissors
 } from 'lucide-react';
 
-export type FormTabType = 'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'templates';
+export type FormTabType = 'store' | 'items' | 'inventory' | 'payment' | 'calculator' | 'size' | 'fonts' | 'labels' | 'code' | 'chaining' | 'templates';
 
 export const FORM_TABS: { id: FormTabType; label: string }[] = [
   { id: 'store', label: 'Toko & Detail' },
@@ -78,6 +83,7 @@ export const FORM_TABS: { id: FormTabType; label: string }[] = [
   { id: 'fonts', label: 'Ubah Font' },
   { id: 'labels', label: 'Ubah Label' },
   { id: 'code', label: 'Barcode & QR' },
+  { id: 'chaining', label: 'Receipt Chaining' },
   { id: 'templates', label: 'Preset' },
 ];
 
@@ -91,6 +97,7 @@ export const TAB_BUTTON_IDS: Record<FormTabType, string> = {
   fonts: 'tab-receipt-fonts',
   labels: 'tab-receipt-labels',
   code: 'tab-barcode-qr',
+  chaining: 'tab-receipt-chaining',
   templates: 'tab-presets',
 };
 
@@ -983,6 +990,26 @@ export default function ReceiptForm({
         >
           <QrCode className="w-3.5 h-3.5 shrink-0" />
           <span>Barcode & QR</span>
+        </button>
+        <button
+          onClick={() => handleSwitchTab('chaining')}
+          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
+            activeTab === 'chaining'
+              ? 'bg-slate-950 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+          id="tab-receipt-chaining"
+        >
+          <Link2 className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+          <span className="hidden md:inline">Chaining</span>
+          <span className="md:hidden">Rantai</span>
+          {receipt.chainConfig?.enabled && (
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold font-mono ${
+              activeTab === 'chaining' ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-800'
+            }`}>
+              {Object.values(receipt.chainConfig.slips).filter(Boolean).length} Slip
+            </span>
+          )}
         </button>
         <button
           onClick={() => handleSwitchTab('templates')}
@@ -3681,6 +3708,459 @@ export default function ReceiptForm({
           </div>
         )}
 
+        {/* TAB: RECEIPT CHAINING (CETAK BERANTAI & AUDIT HASH) */}
+        {activeTab === 'chaining' && (
+          <div className="space-y-4" id="form-section-chaining">
+            {/* Header / Intro */}
+            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Link2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-indigo-950 flex items-center gap-2">
+                    Receipt Chaining (Cetak Berantai Multi-Slip)
+                    <span className="text-[10px] font-mono font-bold bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full">
+                      POS F&B, Retail & Logistik
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-indigo-900/80 leading-relaxed">
+                    Cetak beberapa lembar struk berurutan dalam satu continuous roll printer thermal dengan garis sobekan pemotong (✂ - - - ✂) dan verifikasi rantai transaksi.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Master Toggle & Chaining Controls */}
+            {(() => {
+              const currentChain: ReceiptChainConfig = receipt.chainConfig || DEFAULT_RECEIPT_CHAIN_CONFIG;
+              const totalActiveSlips = Object.values(currentChain.slips).filter(Boolean).length;
+              const computedHash = receipt.chainHash || computeReceiptChainHash({
+                transactionId: receipt.transactionId,
+                dateTime: receipt.dateTime,
+                total: receipt.total,
+                prevReceiptHash: receipt.prevReceiptHash,
+                chainSequence: currentChain.chainSequence,
+              });
+
+              const updateChain = (partial: Partial<ReceiptChainConfig>) => {
+                handleRecalculate({
+                  chainConfig: {
+                    ...currentChain,
+                    ...partial,
+                  },
+                });
+              };
+
+              const toggleSlip = (key: keyof ReceiptChainConfig['slips']) => {
+                const nextSlips = {
+                  ...currentChain.slips,
+                  [key]: !currentChain.slips[key],
+                };
+                if (!Object.values(nextSlips).some(Boolean)) {
+                  nextSlips.customer = true;
+                }
+                updateChain({ slips: nextSlips });
+              };
+
+              const applyPreset = (preset: 'CAFE' | 'RETAIL' | 'DELIVERY' | 'FULL') => {
+                if (preset === 'CAFE') {
+                  updateChain({
+                    enabled: true,
+                    slips: { customer: true, kitchen: true, merchant: false, delivery: false },
+                    orderType: 'DINE_IN',
+                    tableNumber: currentChain.tableNumber || 'Meja 01',
+                  });
+                } else if (preset === 'RETAIL') {
+                  updateChain({
+                    enabled: true,
+                    slips: { customer: true, kitchen: false, merchant: true, delivery: false },
+                    orderType: 'TAKE_AWAY',
+                  });
+                } else if (preset === 'DELIVERY') {
+                  updateChain({
+                    enabled: true,
+                    slips: { customer: true, kitchen: true, merchant: false, delivery: true },
+                    orderType: 'DELIVERY',
+                    tableNumber: currentChain.tableNumber || 'Pesanan Ojol / Delivery',
+                  });
+                } else if (preset === 'FULL') {
+                  updateChain({
+                    enabled: true,
+                    slips: { customer: true, kitchen: true, merchant: true, delivery: true },
+                  });
+                }
+              };
+
+              return (
+                <div className="space-y-4">
+                  {/* Master Switch Card */}
+                  <div className={`p-4 rounded-2xl border transition flex items-center justify-between ${
+                    currentChain.enabled 
+                      ? 'bg-indigo-50/60 border-indigo-300 ring-2 ring-indigo-500/10' 
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                        currentChain.enabled ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-slate-900 text-xs block">
+                          Aktifkan Receipt Chaining
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {currentChain.enabled
+                            ? `Aktif (${totalActiveSlips} slip berantai: ${
+                                [
+                                  currentChain.slips.customer && 'Pelanggan',
+                                  currentChain.slips.kitchen && 'Tiket Dapur',
+                                  currentChain.slips.merchant && 'Kasir',
+                                  currentChain.slips.delivery && 'Surat Jalan',
+                                ].filter(Boolean).join(', ')
+                              })`
+                            : 'Nonaktif • Hanya mencetak 1 struk tunggal'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={currentChain.enabled}
+                        onChange={(e) => updateChain({ enabled: e.target.checked })}
+                        className="sr-only peer"
+                        id="toggle-master-chaining"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div>
+                    <label className="block text-slate-700 font-bold text-xs mb-2 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Preset Cepat Sesuai Alur Usaha:
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('CAFE')}
+                        className="p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 bg-white text-left transition cursor-pointer flex flex-col justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                          <Utensils className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Resto & Kafe</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1">Struk + Tiket Dapur</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('RETAIL')}
+                        className="p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 bg-white text-left transition cursor-pointer flex flex-col justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                          <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Ritel & Toko</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1">Struk + Arsip Kasir</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('DELIVERY')}
+                        className="p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 bg-white text-left transition cursor-pointer flex flex-col justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                          <Truck className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Delivery/Ojol</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1">Struk + Dapur + Jalan</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('FULL')}
+                        className="p-3 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 bg-white text-left transition cursor-pointer flex flex-col justify-between shadow-2xs"
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
+                          <Layers className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Full Chain (4)</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 mt-1">Semua 4 Lembar</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Slips Selection Grid */}
+                  <div>
+                    <label className="block text-slate-700 font-bold text-xs mb-2">
+                      Pilihan Lembar Struk Berantai (Slips Checklist):
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* Customer Slip */}
+                      <div 
+                        onClick={() => toggleSlip('customer')}
+                        className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                          currentChain.slips.customer 
+                            ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-500/20' 
+                            : 'bg-white border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={currentChain.slips.customer}
+                          onChange={() => {}}
+                          className="mt-0.5 w-4 h-4 rounded text-indigo-600 pointer-events-none"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                              👤 1. Struk Pelanggan (Customer Copy)
+                            </span>
+                            {currentChain.slips.customer && (
+                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Aktif</span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                            Struk utama lengkap berisi rincian barang, harga, diskon, pajak, nominal pembayaran, status pelunasan, dan QR Code/Barcode.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Kitchen Slip */}
+                      <div 
+                        onClick={() => toggleSlip('kitchen')}
+                        className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                          currentChain.slips.kitchen 
+                            ? 'bg-amber-50/60 border-amber-300 ring-1 ring-amber-500/20' 
+                            : 'bg-white border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={currentChain.slips.kitchen}
+                          onChange={() => {}}
+                          className="mt-0.5 w-4 h-4 rounded text-amber-600 pointer-events-none"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                              🍳 2. Tiket Dapur / Bar (Kitchen Slip)
+                            </span>
+                            {currentChain.slips.kitchen && (
+                              <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded">Aktif</span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                            Tiket juru masak & peracik minuman. Menampilkan kuantiti porsi besar, kotak ceklis persiapan menu, dan catatan pesanan dapur (tanpa harga).
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Merchant Slip */}
+                      <div 
+                        onClick={() => toggleSlip('merchant')}
+                        className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                          currentChain.slips.merchant 
+                            ? 'bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-500/20' 
+                            : 'bg-white border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={currentChain.slips.merchant}
+                          onChange={() => {}}
+                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 pointer-events-none"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                              📑 3. Salinan Toko / Arsip Kasir (Merchant Copy)
+                            </span>
+                            {currentChain.slips.merchant && (
+                              <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">Aktif</span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                            Lembar arsip pembukuan keuangan toko. Dilengkapi ringkasan audit, metode pembayaran, dan kotak tanda tangan kasir & konsumen.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Delivery Slip */}
+                      <div 
+                        onClick={() => toggleSlip('delivery')}
+                        className={`p-3.5 rounded-xl border transition cursor-pointer flex items-start gap-3 ${
+                          currentChain.slips.delivery 
+                            ? 'bg-sky-50/60 border-sky-300 ring-1 ring-sky-500/20' 
+                            : 'bg-white border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={currentChain.slips.delivery}
+                          onChange={() => {}}
+                          className="mt-0.5 w-4 h-4 rounded text-sky-600 pointer-events-none"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                              🚚 4. Surat Jalan & Resi Pengambilan (Delivery Slip)
+                            </span>
+                            {currentChain.slips.delivery && (
+                              <span className="text-[9px] font-bold text-sky-800 bg-sky-100 px-1.5 py-0.2 rounded">Aktif</span>
+                            )}
+                          </div>
+                          <p className="text-[10.5px] text-slate-500 mt-0.5 leading-snug">
+                            Bukti serah terima barang untuk pesanan bungkus, pengantaran kurir/ojol. Dilengkapi tanda tangan petugas & penerima paket.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dining & Operational Details */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Utensils className="w-3.5 h-3.5 text-slate-600" />
+                      Detail Operasional & Layanan Meja:
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Tipe Layanan Pesanan:
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            { id: 'DINE_IN', label: '🍽️ Dine In' },
+                            { id: 'TAKE_AWAY', label: '🥡 Take Away' },
+                            { id: 'DELIVERY', label: '🛵 Delivery' },
+                          ].map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => updateChain({ orderType: t.id as any })}
+                              className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition text-center cursor-pointer border ${
+                                currentChain.orderType === t.id
+                                  ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="chain-table-number">
+                          Nomor Meja / Antrean / Ruangan:
+                        </label>
+                        <input
+                          type="text"
+                          id="chain-table-number"
+                          value={currentChain.tableNumber || ''}
+                          onChange={(e) => updateChain({ tableNumber: e.target.value })}
+                          placeholder="e.g. Meja 08, VIP-2, Antrean #42"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="chain-kitchen-notes">
+                        Catatan Khusus Pesanan / Dapur:
+                      </label>
+                      <textarea
+                        id="chain-kitchen-notes"
+                        rows={2}
+                        value={currentChain.kitchenNotes || ''}
+                        onChange={(e) => updateChain({ kitchenNotes: e.target.value })}
+                        placeholder="e.g. Tidak pedas, es dipisah, sambal ekstra, jangan pakai bawang goreng..."
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cryptographic Hash Chaining & Audit */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          Rantai Audit Integritas Transaksi (Cryptographic Chaining)
+                        </h4>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={currentChain.enableAuditHash !== false}
+                          onChange={(e) => updateChain({ enableAuditHash: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                      </label>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      Setiap struk diikat secara kriptografis ke struk sebelumnya menggunakan tanda tangan hash deterministik dan indeks rantai urut untuk mencegah manipulasi struk kasir.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Nomor Urut Transaksi dalam Rantai:
+                        </label>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs">
+                            #
+                          </span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={currentChain.chainSequence || 1}
+                            onChange={(e) => updateChain({ chainSequence: parseInt(e.target.value, 10) || 1 })}
+                            className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Hash Blok Integritas Struk Ini:
+                        </label>
+                        <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-mono font-bold text-xs text-indigo-700 truncate shadow-2xs">
+                          {computedHash}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Helper Call to Action */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-slate-500">
+                      💡 Buka panel <strong>Pratinjau Struk</strong> di sebelah kanan untuk melihat simulasi cetak berantai secara visual.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        document.getElementById('receipt-preview-panel')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Lihat Pratinjau Rantai</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
 
       {/* Footer Save Receipt Action */}

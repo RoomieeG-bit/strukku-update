@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Item, ReceiptGroup, Customer } from './types';
-import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument } from './utils';
+import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument, computeReceiptChainHash } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
 import ReceiptHistory from './components/ReceiptHistory';
@@ -478,8 +478,21 @@ export default function App() {
   const handleSaveReceipt = () => {
     if (receipt.items.length === 0) return;
 
+    const chainConfig = receipt.chainConfig;
+    let computedChainHash = receipt.chainHash;
+    if (chainConfig?.enabled) {
+      computedChainHash = computeReceiptChainHash({
+        transactionId: receipt.transactionId,
+        dateTime: receipt.dateTime,
+        total: receipt.total,
+        prevReceiptHash: receipt.prevReceiptHash,
+        chainSequence: chainConfig.chainSequence || 1,
+      });
+    }
+
     const finalReceiptToSave: Receipt = {
       ...receipt,
+      chainHash: computedChainHash || receipt.chainHash,
       isDraft: false,
       draftSavedAt: undefined,
     };
@@ -518,6 +531,18 @@ export default function App() {
       defaultCashierName, 
       defaultStorePhone
     );
+
+    // If receipt chaining is enabled, advance chain sequence and link previous receipt
+    if (chainConfig?.enabled) {
+      nextFreshReceipt.chainConfig = {
+        ...chainConfig,
+        chainSequence: (chainConfig.chainSequence || 1) + 1,
+        prevReceiptId: finalReceiptToSave.id,
+        prevReceiptHash: computedChainHash,
+      };
+      nextFreshReceipt.prevReceiptHash = computedChainHash;
+    }
+
     setReceipt(nextFreshReceipt);
     receiptRef.current = nextFreshReceipt;
     try {
