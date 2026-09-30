@@ -5,7 +5,24 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Receipt, Item, InventoryItem, Customer, PaymentMethod, PaymentStatus, CodeDisplayType, ReceiptFontFamily, ReceiptPaperSizePreset, ReceiptLabels, CustomLabel, CustomLabelPosition, CustomImportedFont } from '../types';
-import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss, isPaymentInsufficient } from '../utils';
+import { generateTransactionId, calculateTotals, formatCurrency, RECEIPT_FONTS, PAPER_SIZE_OPTIONS, getPaperWidthMm, LABEL_PRESETS, SUGGESTED_CUSTOM_LABELS, DEFAULT_RECEIPT_LABELS, getReceiptLabels, loadCustomFontsFromStorage, saveCustomFontsToStorage, registerCustomFontsInDocument, getFontFamilyCss } from '../utils';
+
+// Helper function to check if payment is insufficient / deficient
+function isPaymentInsufficient(receipt: Receipt): boolean {
+  if (!receipt || !receipt.items || receipt.items.length === 0 || receipt.total <= 0) {
+    return false;
+  }
+  if (receipt.paymentStatus === 'BELUM_LUNAS' || receipt.paymentStatus === 'HUTANG') {
+    return true;
+  }
+  if (receipt.paymentMethod === 'CASH') {
+    const cash = typeof receipt.cashReceived === 'number' ? receipt.cashReceived : 0;
+    if (cash < receipt.total) {
+      return true;
+    }
+  }
+  return false;
+}
 import { QRCodeSVG } from 'qrcode.react';
 import InventoryTab from './InventoryTab';
 import CashierCalculatorTab from './CashierCalculatorTab';

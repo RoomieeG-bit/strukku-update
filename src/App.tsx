@@ -5,13 +5,41 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, Item, ReceiptGroup, Customer } from './types';
-import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument, computeReceiptChainHash } from './utils';
+import { generateTransactionId, calculateTotals, loadCustomFontsFromStorage, registerCustomFontsInDocument } from './utils';
 import ReceiptForm from './components/ReceiptForm';
 import ReceiptPreview from './components/ReceiptPreview';
 import ReceiptHistory from './components/ReceiptHistory';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
-import CustomerListTab, { DEFAULT_CUSTOMERS } from './components/CustomerListTab';
+import CustomerListTab from './components/CustomerListTab';
+
+const FALLBACK_DEFAULT_CUSTOMERS: Customer[] = [
+  {
+    id: 'cust-1',
+    name: 'Budi Santoso',
+    phone: '0812-3456-7890',
+    email: 'budi.santoso@email.com',
+    address: 'Jl. Merdeka No. 12, Jakarta Pusat',
+    notes: 'Pelanggan setia retail mingguan',
+    createdAt: '2025-01-10T10:00:00Z',
+    totalSpent: 450000,
+    totalTransactions: 6,
+    category: 'VIP',
+    discountRate: 5
+  },
+  {
+    id: 'cust-2',
+    name: 'Siti Rahmawati',
+    phone: '0857-9876-5432',
+    address: 'Komp. Graha Indah Blok C-4, Bandung',
+    notes: 'Member grosir toko sembako',
+    createdAt: '2025-01-15T14:30:00Z',
+    totalSpent: 1250000,
+    totalTransactions: 12,
+    category: 'Grosir',
+    discountRate: 10
+  }
+];
 import { 
   PlusCircle, 
   History, 
@@ -112,7 +140,7 @@ export default function App() {
     } catch (e) {
       console.error('Error reading customers from localStorage:', e);
     }
-    return DEFAULT_CUSTOMERS;
+    return FALLBACK_DEFAULT_CUSTOMERS;
   });
 
   // Keep customers in localStorage
@@ -478,21 +506,8 @@ export default function App() {
   const handleSaveReceipt = () => {
     if (receipt.items.length === 0) return;
 
-    const chainConfig = receipt.chainConfig;
-    let computedChainHash = receipt.chainHash;
-    if (chainConfig?.enabled) {
-      computedChainHash = computeReceiptChainHash({
-        transactionId: receipt.transactionId,
-        dateTime: receipt.dateTime,
-        total: receipt.total,
-        prevReceiptHash: receipt.prevReceiptHash,
-        chainSequence: chainConfig.chainSequence || 1,
-      });
-    }
-
     const finalReceiptToSave: Receipt = {
       ...receipt,
-      chainHash: computedChainHash || receipt.chainHash,
       isDraft: false,
       draftSavedAt: undefined,
     };
@@ -531,18 +546,6 @@ export default function App() {
       defaultCashierName, 
       defaultStorePhone
     );
-
-    // If receipt chaining is enabled, advance chain sequence and link previous receipt
-    if (chainConfig?.enabled) {
-      nextFreshReceipt.chainConfig = {
-        ...chainConfig,
-        chainSequence: (chainConfig.chainSequence || 1) + 1,
-        prevReceiptId: finalReceiptToSave.id,
-        prevReceiptHash: computedChainHash,
-      };
-      nextFreshReceipt.prevReceiptHash = computedChainHash;
-    }
-
     setReceipt(nextFreshReceipt);
     receiptRef.current = nextFreshReceipt;
     try {
