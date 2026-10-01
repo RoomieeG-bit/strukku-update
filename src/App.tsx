@@ -630,6 +630,69 @@ export default function App() {
     }, 100);
   };
 
+  // Reuse an existing receipt as the source for a brand new transaction (new transaction ID, current timestamp, deep-cloned items)
+  const handleReuseReceipt = (sourceReceipt: Receipt) => {
+    const nextTxId = generateTransactionId();
+    const formattedNow = getInitialLocalDateTime();
+
+    // Deep clone items with fresh IDs
+    const clonedItems: Item[] = (sourceReceipt.items || []).map((item) => ({
+      ...item,
+      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    }));
+
+    // Recalculate totals
+    const { subtotal, taxAmount, discountAmount, total } = calculateTotals(
+      clonedItems,
+      sourceReceipt.taxRate || 0,
+      sourceReceipt.discountRate || 0,
+      sourceReceipt.discountType || 'PERCENT'
+    );
+
+    const reusedReceipt: Receipt = {
+      ...sourceReceipt,
+      id: Date.now().toString(),
+      transactionId: nextTxId,
+      dateTime: formattedNow,
+      items: clonedItems,
+      subtotal,
+      taxAmount,
+      discountAmount,
+      total,
+      cashReceived: sourceReceipt.paymentMethod === 'CASH' ? total : 0,
+      changeAmount: 0,
+      paymentStatus: 'SUDAH_LUNAS',
+      isDraft: false,
+      isPinned: false,
+      isFavorite: false,
+      isArchived: false,
+      archivedAt: undefined,
+      deletedAt: undefined,
+      draftSavedAt: undefined,
+      isChained: false,
+      parentTransactionId: undefined,
+      parentReceiptId: undefined,
+      isReused: true,
+      reusedFromTransactionId: sourceReceipt.transactionId,
+    };
+
+    setReceipt(reusedReceipt);
+    receiptRef.current = reusedReceipt;
+    try {
+      localStorage.setItem('strukku_active_draft', JSON.stringify(reusedReceipt));
+    } catch (e) {
+      console.error('Error saving reused receipt draft:', e);
+    }
+
+    setActiveView('generator');
+    showToast(`♻️ Struk #${sourceReceipt.transactionId.split('/')[0]} berhasil digunakan ulang sebagai struk baru (#${nextTxId.split('/')[0]})!`);
+
+    // Smooth scroll back to form
+    setTimeout(() => {
+      document.getElementById('receipt-form-panel')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
   // Update an existing receipt in history or archived history directly
   const handleUpdateReceipt = (updatedReceipt: Receipt) => {
     const inHistory = history.some((item) => item.id === updatedReceipt.id);
@@ -1450,6 +1513,7 @@ export default function App() {
               archivedHistory={archivedHistory}
               trashHistory={trashHistory}
               onLoadReceipt={handleLoadReceipt}
+              onReuseReceipt={handleReuseReceipt}
               onUpdateReceipt={handleUpdateReceipt}
               onTogglePinReceipt={handleTogglePinReceipt}
               onClearHistory={handleClearHistory}

@@ -844,6 +844,11 @@ export default function ReceiptForm({
         <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
           <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           <span>Generator POS Kasir</span>
+          {receipt.isReused && (
+            <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold inline-flex items-center gap-1">
+              Direuse
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 font-mono text-[10px] text-slate-600">
           <span className="hidden sm:inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs" title="Tekan Home atau End untuk swipe tab formulir">

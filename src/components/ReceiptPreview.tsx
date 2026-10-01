@@ -1175,6 +1175,11 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
 
           {/* Store Name */}
           <div className="text-center text-base font-extrabold tracking-wide uppercase break-words mb-1 text-slate-900">
+            {receipt.isReused && (
+              <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 mr-1.5 align-middle normal-case tracking-normal">
+                Direuse
+              </span>
+            )}
             {receipt.storeName || 'TOKO SAYA'}
           </div>
 

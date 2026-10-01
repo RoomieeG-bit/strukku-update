@@ -44,7 +44,8 @@ import {
   Folder,
   FolderPlus,
   FolderOpen,
-  Link as LinkIcon
+  Link as LinkIcon,
+  CopyPlus
 } from 'lucide-react';
 import EditReceiptModal from './EditReceiptModal';
 import AddToGroupModal from './AddToGroupModal';
@@ -98,6 +99,7 @@ interface ReceiptHistoryProps {
   onBulkRestoreTrash?: (ids: string[]) => void;
   onBulkPermanentDeleteTrash?: (ids: string[]) => void;
   onCreateChainReceipt?: (parentReceipt: Receipt) => void;
+  onReuseReceipt?: (receipt: Receipt) => void;
   currencySymbol: string;
 }
 
@@ -112,6 +114,7 @@ export default function ReceiptHistory({
   onAddReceiptsToGroup,
   onRemoveReceiptFromGroup,
   onCreateChainReceipt,
+  onReuseReceipt,
   onLoadReceipt,
   onUpdateReceipt,
   onTogglePinReceipt,
@@ -1445,7 +1448,15 @@ export default function ReceiptHistory({
                               <Pin className="w-3 h-3 fill-slate-950" /> Tersemat di Atas
                             </span>
                           )}
-                          <span className="font-bold text-slate-800 text-sm truncate font-display">
+                          {item.isReused && (
+                            <span 
+                              className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1 shadow-2xs"
+                              title={`Struk ini merupakan hasil Reuse dari #${item.reusedFromTransactionId || 'Struk Asal'}`}
+                            >
+                              <CopyPlus className="w-3 h-3 text-emerald-700" /> Direuse
+                            </span>
+                          )}
+                          <span className="font-bold text-slate-800 text-sm truncate font-display flex items-center gap-1.5">
                             {item.storeName}
                           </span>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
@@ -1587,6 +1598,30 @@ export default function ReceiptHistory({
                           </div>
                         )}
 
+                        {/* Reused Receipt Origin Indicator */}
+                        {item.isReused && (
+                          <div className="mt-2.5 p-2.5 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-emerald-500/10 border-l-4 border-emerald-500 rounded-r-xl flex items-center justify-between text-xs text-emerald-950">
+                            <div className="flex items-center gap-2">
+                              <span className="text-emerald-600 font-bold">♻️</span>
+                              <span className="text-[11px] font-medium">
+                                Struk Hasil Reuse dari Struk Asal: <strong className="font-mono text-slate-900">#{item.reusedFromTransactionId || 'Asal'}</strong>
+                              </span>
+                            </div>
+                            {item.reusedFromTransactionId && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchTerm(item.reusedFromTransactionId || '');
+                                }}
+                                className="text-[11px] font-bold text-emerald-800 hover:text-emerald-950 underline cursor-pointer shrink-0 ml-2"
+                              >
+                                Temukan Struk Asal →
+                              </button>
+                            )}
+                          </div>
+                        )}
+
                         {/* Visual Chain Connector: Child Chains from Parent */}
                         {(() => {
                           const childChains = history.filter((r) => r.parentReceiptId === item.id);
@@ -1657,6 +1692,20 @@ export default function ReceiptHistory({
                             >
                               <LinkIcon className="w-3.5 h-3.5 text-amber-700" />
                               <span className="hidden sm:inline">Rantai</span>
+                            </button>
+                          )}
+
+                          {/* Reuse Struk Button (Gunakan Ulang Struk sebagai Struk Baru) */}
+                          {onReuseReceipt && (
+                            <button
+                              type="button"
+                              onClick={() => onReuseReceipt(item)}
+                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Gunakan struk lama ini sebagai sumber untuk struk baru (Reuse / Duplikasi)"
+                              id={`btn-reuse-receipt-${item.id}`}
+                            >
+                              <CopyPlus className="w-3.5 h-3.5 text-emerald-700" />
+                              <span className="hidden sm:inline">Reuse</span>
                             </button>
                           )}
 
@@ -1753,6 +1802,14 @@ export default function ReceiptHistory({
                                 <Pin className="w-2.5 h-2.5 fill-slate-950" /> Pin
                               </span>
                             )}
+                            {item.isReused && (
+                              <span 
+                                className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1 shadow-2xs"
+                                title={`Struk ini merupakan hasil Reuse dari #${item.reusedFromTransactionId || 'Struk Asal'}`}
+                              >
+                                <CopyPlus className="w-2.5 h-2.5 text-emerald-700" /> Direuse
+                              </span>
+                            )}
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                               item.paymentMethod === 'CASH'
                                 ? 'bg-amber-50 text-amber-700 border border-amber-100'
@@ -1792,8 +1849,13 @@ export default function ReceiptHistory({
                               </span>
                             )}
                           </div>
-                          <h4 className="font-bold text-slate-900 text-sm truncate font-display" title={item.storeName}>
-                            {item.storeName}
+                          <h4 className="font-bold text-slate-900 text-sm truncate font-display flex items-center gap-1.5" title={item.storeName}>
+                            {item.isReused && (
+                              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                                Direuse
+                              </span>
+                            )}
+                            <span className="truncate">{item.storeName}</span>
                           </h4>
                         </div>
 
@@ -1881,6 +1943,27 @@ export default function ReceiptHistory({
                           </div>
                         )}
 
+                        {/* Reused Receipt Origin in Grid Card */}
+                        {item.isReused && (
+                          <div className="mb-2.5 p-2 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-l-4 border-emerald-500 rounded-r-lg text-[10px] text-emerald-950 flex items-center justify-between">
+                            <span className="font-semibold truncate">
+                              ♻️ Hasil Reuse dari: <strong className="font-mono">#{item.reusedFromTransactionId || 'Asal'}</strong>
+                            </span>
+                            {item.reusedFromTransactionId && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchTerm(item.reusedFromTransactionId || '');
+                                }}
+                                className="text-emerald-800 hover:text-emerald-950 underline font-bold shrink-0 ml-1 cursor-pointer"
+                              >
+                                Cari Asal →
+                              </button>
+                            )}
+                          </div>
+                        )}
+
                         {/* Child Chain Indicator if parent has refunds */}
                         {(() => {
                           const childChains = history.filter((r) => r.parentReceiptId === item.id);
@@ -1919,7 +2002,7 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className={`grid ${onCreateChainReceipt && !item.isDraft ? 'grid-cols-6' : 'grid-cols-5'} gap-1.5`}>
+                        <div className={`grid ${onCreateChainReceipt && !item.isDraft ? 'grid-cols-7' : 'grid-cols-6'} gap-1.5`}>
                           <button
                             type="button"
                             onClick={() => onTogglePinReceipt?.(item.id)}
@@ -1943,6 +2026,19 @@ export default function ReceiptHistory({
                               id={`btn-grid-chain-receipt-${item.id}`}
                             >
                               <LinkIcon className="w-3.5 h-3.5 text-amber-700" />
+                            </button>
+                          )}
+
+                          {/* Reuse Struk Button in Grid */}
+                          {onReuseReceipt && (
+                            <button
+                              type="button"
+                              onClick={() => onReuseReceipt(item)}
+                              className="py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Gunakan struk lama ini sebagai sumber untuk struk baru (Reuse)"
+                              id={`btn-grid-reuse-receipt-${item.id}`}
+                            >
+                              <CopyPlus className="w-3.5 h-3.5 text-emerald-700" />
                             </button>
                           )}
 
@@ -3023,6 +3119,20 @@ export default function ReceiptHistory({
                         <span className="hidden sm:inline">Edit</span>
                       </button>
 
+                      {/* Reuse Struk Arsip Button */}
+                      {onReuseReceipt && (
+                        <button
+                          type="button"
+                          onClick={() => onReuseReceipt(item)}
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs active:scale-95"
+                          title="Gunakan struk arsip ini sebagai sumber struk baru (Reuse)"
+                          id={`btn-reuse-archived-receipt-${item.id}`}
+                        >
+                          <CopyPlus className="w-3.5 h-3.5 text-emerald-700" />
+                          <span className="hidden sm:inline">Reuse</span>
+                        </button>
+                      )}
+
                       {/* Muat ke Generator Button */}
                       <button
                         type="button"
@@ -3170,7 +3280,7 @@ export default function ReceiptHistory({
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-1.5">
+                        <div className={`grid ${onReuseReceipt ? 'grid-cols-5' : 'grid-cols-4'} gap-1.5`}>
                           <button
                             type="button"
                             onClick={() => onUnarchiveReceipt?.(item.id)}
@@ -3190,6 +3300,19 @@ export default function ReceiptHistory({
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* Reuse Struk Arsip in Card */}
+                          {onReuseReceipt && (
+                            <button
+                              type="button"
+                              onClick={() => onReuseReceipt(item)}
+                              className="py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/90 rounded-lg text-xs font-semibold flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95"
+                              title="Gunakan struk arsip ini sebagai sumber struk baru (Reuse)"
+                              id={`btn-grid-reuse-archived-${item.id}`}
+                            >
+                              <CopyPlus className="w-3.5 h-3.5 text-emerald-700" />
+                            </button>
+                          )}
 
                           <button
                             type="button"
