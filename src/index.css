@@ -135,5 +135,67 @@ body {
     background: linear-gradient(-45deg, #fefefb 5px, transparent 0), linear-gradient(45deg, #fefefb 5px, transparent 0);
     background-size: 10px 10px;
   }
+
+  /* ======================================================== */
+  /* MODE HEMAT TINTA / KERTAS (SUPER COMPACT THERMAL ECO)    */
+  /* ======================================================== */
+  .mode-hemat {
+    line-height: 1.1 !important;
+  }
+
+  .mode-hemat,
+  .mode-hemat * {
+    line-height: 1.1 !important;
+  }
+
+  /* Pangkas Padding & Margin Kontainer Struk */
+  .mode-hemat.receipt-paper {
+    padding: 6px 8px !important;
+  }
+
+  /* Pangkas semua margin pemisah vertikal antar elemen */
+  .mode-hemat .my-4,
+  .mode-hemat .my-3,
+  .mode-hemat [class*="my-2.5"],
+  .mode-hemat .my-2 {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .mode-hemat .mb-4,
+  .mode-hemat .mb-3,
+  .mode-hemat [class*="mb-2.5"],
+  .mode-hemat .mb-2 {
+    margin-bottom: 2px !important;
+  }
+
+  .mode-hemat .mt-4,
+  .mode-hemat .mt-3,
+  .mode-hemat [class*="mt-2.5"],
+  .mode-hemat .mt-2 {
+    margin-top: 2px !important;
+  }
+
+  /* Rapatkan jarak antar item dan daftar */
+  .mode-hemat .space-y-3 > :not([hidden]) ~ :not([hidden]),
+  .mode-hemat .space-y-2 > :not([hidden]) ~ :not([hidden]),
+  .mode-hemat [class*="space-y-1.5"] > :not([hidden]) ~ :not([hidden]),
+  .mode-hemat .space-y-1 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1.5px !important;
+  }
+
+  /* Ubah garis putus-putus tebal menjadi garis solid 1px ultra-ramping */
+  .mode-hemat .border-dashed,
+  .mode-hemat .border-dotted {
+    border-style: solid !important;
+    border-width: 1px 0 0 0 !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Kecilkan header & footer notes */
+  .mode-hemat .eco-compact-text {
+    font-size: 85% !important;
+    line-height: 1.05 !important;
+  }
 }
 

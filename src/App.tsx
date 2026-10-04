@@ -177,6 +177,15 @@ export default function App() {
     return localStorage.getItem('strukku_default_store_phone') || '021-7401234';
   });
 
+  // Mode Hemat Tinta / Kertas (Paper & Ink Saver Eco Mode)
+  const [isEcoMode, setIsEcoMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('strukku_eco_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // Main history log of saved transactions
   const [history, setHistory] = useState<Receipt[]>(() => {
     const stored = localStorage.getItem('strukku_history');
@@ -310,6 +319,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('strukku_default_store_phone', defaultStorePhone);
   }, [defaultStorePhone]);
+
+  // Sync ecoMode preference in localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('strukku_eco_mode', isEcoMode ? 'true' : 'false');
+    } catch (e) {
+      console.error('Error saving eco mode to localStorage:', e);
+    }
+  }, [isEcoMode]);
+
+  const handleToggleEcoMode = () => {
+    setIsEcoMode((prev) => {
+      const next = !prev;
+      showToast(next ? '🌱 Mode Hemat Tinta / Kertas diaktifkan! Struk kini super padat & hemat kertas gulungan.' : 'Mode Hemat dinonaktifkan. Kembali ke layout standar.');
+      return next;
+    });
+  };
 
   // Sync history state with localStorage
   useEffect(() => {
@@ -1120,6 +1146,7 @@ export default function App() {
     setDefaultStoreAddress('Jl. Raya Ciputat Raya No. 42, Jakarta');
     setDefaultCashierName('Andi Wijaya');
     setDefaultStorePhone('021-7401234');
+    setIsEcoMode(false);
     setReceipt(getFreshDefaultReceipt('KOPI SENJA CIPUTAT', 'Jl. Raya Ciputat Raya No. 42, Jakarta', 'Andi Wijaya', '021-7401234'));
     showToast('⚠️ Seluruh data LocalStorage berhasil dibersihkan ke bawaan pabrik.');
   };
@@ -1134,6 +1161,7 @@ export default function App() {
     defaultStoreAddress?: string;
     defaultCashierName?: string;
     defaultStorePhone?: string;
+    isEcoMode?: boolean;
     activeReceipt?: Receipt;
   }) => {
     if (Array.isArray(backupData.history)) {
@@ -1166,6 +1194,10 @@ export default function App() {
     if (backupData.defaultStorePhone) {
       setDefaultStorePhone(backupData.defaultStorePhone);
       localStorage.setItem('strukku_default_store_phone', backupData.defaultStorePhone);
+    }
+    if (typeof backupData.isEcoMode === 'boolean') {
+      setIsEcoMode(backupData.isEcoMode);
+      localStorage.setItem('strukku_eco_mode', backupData.isEcoMode ? 'true' : 'false');
     }
     if (Array.isArray((backupData as any).receiptGroups)) {
       setReceiptGroups((backupData as any).receiptGroups);
@@ -1468,6 +1500,8 @@ export default function App() {
                 receipt={receipt}
                 currencySymbol={currencySymbol}
                 onUpdateReceipt={(updated) => setReceipt((prev) => ({ ...prev, ...updated }))}
+                isEcoMode={isEcoMode}
+                onToggleEcoMode={handleToggleEcoMode}
               />
             </div>
 
@@ -1577,6 +1611,8 @@ export default function App() {
               onSetDefaultCashierName={handleSetDefaultCashierName}
               defaultStorePhone={defaultStorePhone}
               onSetDefaultStorePhone={handleSetDefaultStorePhone}
+              isEcoMode={isEcoMode}
+              onToggleEcoMode={handleToggleEcoMode}
               onResetAllData={handleResetAllData}
               onRestoreBackup={handleRestoreBackup}
               showToast={showToast}

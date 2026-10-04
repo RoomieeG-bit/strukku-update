@@ -8,6 +8,7 @@ import { Receipt, ReceiptFontFamily, ReceiptPaperSizePreset, CustomLabel } from 
 import { 
   formatCurrency, 
   formatDateTime, 
+  formatCompactDateTime,
   RECEIPT_FONTS, 
   getFontFamilyCss, 
   PAPER_SIZE_OPTIONS, 
@@ -51,7 +52,8 @@ import {
   Plus,
   Minus,
   FileText,
-  Lock
+  Lock,
+  Leaf
 } from 'lucide-react';
 
 // Helper to parse oklch color string and convert to standard rgb/rgba
@@ -426,6 +428,30 @@ const updatePrintStyles = (widthMm: number) => {
         background: #ffffff !important;
         color: #000000 !important;
       }
+      #receipt-print-area.mode-hemat {
+        padding: ${widthMm <= 58 ? '1mm 1.5mm' : '2mm 3mm'} !important;
+        line-height: 1.05 !important;
+      }
+      #receipt-print-area.mode-hemat * {
+        line-height: 1.05 !important;
+      }
+      #receipt-print-area.mode-hemat .my-4,
+      #receipt-print-area.mode-hemat .my-3,
+      #receipt-print-area.mode-hemat .my-2 {
+        margin-top: 0.8mm !important;
+        margin-bottom: 0.8mm !important;
+      }
+      #receipt-print-area.mode-hemat .mb-4,
+      #receipt-print-area.mode-hemat .mb-3,
+      #receipt-print-area.mode-hemat .mb-2 {
+        margin-bottom: 0.8mm !important;
+      }
+      #receipt-print-area.mode-hemat .border-dashed,
+      #receipt-print-area.mode-hemat .border-dotted {
+        border-style: solid !important;
+        border-width: 0.5pt 0 0 0 !important;
+        border-color: #000000 !important;
+      }
       .receipt-paper::after {
         display: none !important;
       }
@@ -437,9 +463,18 @@ interface ReceiptPreviewProps {
   receipt: Receipt;
   currencySymbol: string;
   onUpdateReceipt?: (updated: Partial<Receipt>) => void;
+  isEcoMode?: boolean;
+  onToggleEcoMode?: () => void;
 }
 
-export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceipt }: ReceiptPreviewProps) {
+export default function ReceiptPreview({ 
+  receipt, 
+  currencySymbol, 
+  onUpdateReceipt,
+  isEcoMode,
+  onToggleEcoMode
+}: ReceiptPreviewProps) {
+  const activeEcoMode = Boolean(isEcoMode || receipt.isEcoMode);
   const receiptRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [copiedTx, setCopiedTx] = useState(false);
@@ -787,6 +822,31 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             </div>
           )}
 
+          {/* Quick Mode Hemat Tinta / Kertas Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onToggleEcoMode) {
+                onToggleEcoMode();
+              } else if (onUpdateReceipt) {
+                onUpdateReceipt({ isEcoMode: !activeEcoMode });
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+              activeEcoMode
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-xs'
+                : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
+            }`}
+            title={activeEcoMode ? 'Mode Hemat Aktif: Pangkas kertas thermal & tinta ~50%' : 'Aktifkan Mode Hemat Tinta / Kertas'}
+            id="quick-eco-mode-btn"
+          >
+            <Leaf className={`w-3.5 h-3.5 ${activeEcoMode ? 'text-emerald-400 fill-emerald-400/20' : 'text-slate-400'}`} />
+            <span className="hidden md:inline">Mode Hemat</span>
+            {activeEcoMode && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
+
           <div className="flex gap-1.5 ml-auto sm:ml-0">
             <button
               type="button"
@@ -1015,8 +1075,10 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           ref={receiptRef}
           id="receipt-print-area"
           className={`receipt-paper w-full text-[11px] leading-relaxed text-black shadow-lg flex flex-col animate-fadeIn relative overflow-hidden transition-all duration-150 ${
-            isNarrowPaper ? 'px-3.5 py-6 text-[10.5px]' : 'px-6 py-8'
-          }`}
+            isNarrowPaper 
+              ? (activeEcoMode ? 'px-2 py-3 text-[10px]' : 'px-3.5 py-6 text-[10.5px]') 
+              : (activeEcoMode ? 'px-3 py-4 text-[10.5px]' : 'px-6 py-8')
+          } ${activeEcoMode ? 'mode-hemat' : ''}`}
           style={{ 
             fontFamily: getFontFamilyCss(receipt.fontFamily),
             maxWidth: `${previewMaxWidthPx}px`
@@ -1093,11 +1155,11 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           )}
 
           {/* Feed Header Space */}
-          <div className="border-t-2 border-dashed border-slate-300 w-full mb-4 self-center" />
+          <div className={`border-t border-slate-300 w-full self-center ${activeEcoMode ? 'mb-1 border-solid' : 'border-t-2 border-dashed mb-4'}`} />
 
           {/* Slogan / Slogan Header */}
           {receipt.notesHeader && (
-            <div className="text-center text-slate-600 mb-2 font-medium break-words uppercase">
+            <div className={`text-center text-slate-600 mb-2 font-medium break-words uppercase ${activeEcoMode ? 'eco-compact-text text-[9px] mb-1' : ''}`}>
               {receipt.notesHeader}
             </div>
           )}
@@ -1167,7 +1229,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
               <img 
                 src={receipt.logoUrl} 
                 alt="Logo Toko" 
-                className="max-h-12 object-contain"
+                className="max-h-12 object-contain" 
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -1184,7 +1246,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           </div>
 
           {/* Store Address & Contact */}
-          <div className="text-center text-slate-600 space-y-0.5 text-[10px] break-words px-2">
+          <div className={`text-center text-slate-600 text-[10px] break-words px-2 ${activeEcoMode ? 'space-y-0 text-[8.5px] eco-compact-text' : 'space-y-0.5'}`}>
             {receipt.storeAddress && <div>{receipt.storeAddress}</div>}
             {receipt.storePhone && <div>Telp: {receipt.storePhone}</div>}
             {receipt.storeWebsite && <div className="lowercase">{receipt.storeWebsite}</div>}
@@ -1198,7 +1260,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           )}
 
           {/* Top Divider */}
-          <div className="border-t border-dashed border-slate-400 my-4" />
+          <div className={`border-t border-dashed border-slate-400 ${activeEcoMode ? 'my-1 border-solid border-slate-300' : 'my-4'}`} />
 
           {/* Receipt Meta Details */}
           <div className="space-y-1 text-slate-700 text-[10px]">
@@ -1229,7 +1291,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
             </div>
             <div className="flex justify-between">
               <span>{labels.dateTimeLabel}</span>
-              <span>{formatDateTime(receipt.dateTime)}</span>
+              <span>{activeEcoMode ? formatCompactDateTime(receipt.dateTime) : formatDateTime(receipt.dateTime)}</span>
             </div>
             <div className="flex justify-between">
               <span>{labels.cashierLabel}</span>
@@ -1266,35 +1328,57 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           </div>
 
           {/* Middle Divider */}
-          <div className="border-t border-dashed border-slate-400 my-4" />
+          <div className={`border-t border-dashed border-slate-400 ${activeEcoMode ? 'my-1 border-solid border-slate-300' : 'my-4'}`} />
 
           {/* Items List */}
-          <div className="space-y-3">
+          <div className={activeEcoMode ? 'space-y-1' : 'space-y-3'}>
             {receipt.items.length === 0 ? (
               <div className="text-center italic text-slate-400 my-6">
                 (Struk Kosong)
               </div>
             ) : (
               receipt.items.map((item, idx) => (
-                <div key={item.id || idx} className="space-y-0.5">
-                  <div className="font-bold text-slate-900 uppercase break-words leading-tight">
-                    {item.name}
-                  </div>
-                  <div className="flex justify-between text-slate-700">
-                    <span className="pl-3">
-                      {item.quantity}  x  {formatCurrency(item.price, currencySymbol)}
-                    </span>
-                    <span className="font-bold text-slate-900">
-                      {formatCurrency(item.price * item.quantity, currencySymbol)}
-                    </span>
-                  </div>
-                  {item.discountRate && item.discountRate > 0 && (
-                    <div className="flex justify-between text-slate-600 text-[11px] pl-3">
-                      <span>  * DISKON ({item.discountRate}%)</span>
-                      <span>-{formatCurrency(Math.round((item.price * item.quantity) * (item.discountRate / 100)), currencySymbol)}</span>
+                activeEcoMode ? (
+                  <div key={item.id || idx} className="text-slate-950 leading-tight">
+                    <div className="flex justify-between items-baseline gap-1">
+                      <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
+                        <span className="font-bold text-slate-800 shrink-0 font-mono text-[10px]">{item.quantity}x</span>
+                        <span className="font-semibold uppercase truncate text-[10px]" title={item.name}>
+                          {item.name}
+                        </span>
+                      </div>
+                      <span className="font-bold text-slate-950 shrink-0 text-right text-[10.5px]">
+                        {formatCurrency(item.price * item.quantity, currencySymbol)}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    {item.discountRate && item.discountRate > 0 && (
+                      <div className="flex justify-between text-slate-600 text-[9px] pl-4 leading-tight">
+                        <span>*Disc {item.discountRate}%</span>
+                        <span>-{formatCurrency(Math.round((item.price * item.quantity) * (item.discountRate / 100)), currencySymbol)}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div key={item.id || idx} className="space-y-0.5">
+                    <div className="font-bold text-slate-900 uppercase break-words leading-tight">
+                      {item.name}
+                    </div>
+                    <div className="flex justify-between text-slate-700">
+                      <span className="pl-3">
+                        {item.quantity}  x  {formatCurrency(item.price, currencySymbol)}
+                      </span>
+                      <span className="font-bold text-slate-900">
+                        {formatCurrency(item.price * item.quantity, currencySymbol)}
+                      </span>
+                    </div>
+                    {item.discountRate && item.discountRate > 0 && (
+                      <div className="flex justify-between text-slate-600 text-[11px] pl-3">
+                        <span>  * DISKON ({item.discountRate}%)</span>
+                        <span>-{formatCurrency(Math.round((item.price * item.quantity) * (item.discountRate / 100)), currencySymbol)}</span>
+                      </div>
+                    )}
+                  </div>
+                )
               ))
             )}
           </div>
@@ -1307,7 +1391,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           )}
 
           {/* Bottom Middle Divider */}
-          <div className="border-t border-dashed border-slate-400 my-4" />
+          <div className={`border-t border-dashed border-slate-400 ${activeEcoMode ? 'my-1 border-solid border-slate-300' : 'my-4'}`} />
 
           {/* Calculations Table */}
           <div className="space-y-1.5 text-slate-800">
@@ -1370,7 +1454,7 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
           </div>
 
           {/* Bottom Divider */}
-          <div className="border-t border-dashed border-slate-400 my-4" />
+          <div className={`border-t border-dashed border-slate-400 ${activeEcoMode ? 'my-1 border-solid border-slate-300' : 'my-4'}`} />
 
           {/* Payment Method / Cash details */}
           <div className="space-y-1.5 text-slate-800">
@@ -1424,13 +1508,13 @@ export default function ReceiptPreview({ receipt, currencySymbol, onUpdateReceip
 
           {/* Slogan / Thank you Footer */}
           {receipt.notesFooter && (
-            <div className="text-center text-slate-600 mt-4 pt-2 border-t border-dashed border-slate-300 text-[9px] whitespace-pre-line leading-relaxed break-words uppercase">
+            <div className={`text-center text-slate-600 mt-4 pt-2 border-t border-dashed border-slate-300 text-[9px] whitespace-pre-line leading-relaxed break-words uppercase ${activeEcoMode ? 'eco-compact-text text-[8px] mt-1 pt-1 border-solid border-slate-200 leading-tight' : ''}`}>
               {receipt.notesFooter}
             </div>
           )}
 
           {/* Feed Footer Cut */}
-          <div className="mb-4" />
+          <div className={activeEcoMode ? 'mb-1' : 'mb-4'} />
         </div>
       </div>
 

@@ -478,6 +478,24 @@ export function formatDateTime(dateTimeString: string): string {
 }
 
 /**
+ * Formats compact datetime for Mode Hemat Tinta/Kertas (e.g. 01/10/26 15:07)
+ */
+export function formatCompactDateTime(dateTimeString: string): string {
+  if (!dateTimeString) return '';
+  const date = new Date(dateTimeString);
+  if (isNaN(date.getTime())) return dateTimeString;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const shortYear = String(date.getFullYear()).slice(-2);
+  
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${day}/${month}/${shortYear} ${hours}:${minutes}`;
+}
+
+/**
  * Helper to calculate subtotal, tax, discount, and total for a receipt
  */
 export function calculateTotals(

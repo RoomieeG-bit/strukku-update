@@ -29,7 +29,8 @@ import {
   Sparkles,
   MapPin,
   User,
-  Phone
+  Phone,
+  Leaf
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -45,6 +46,8 @@ interface SettingsProps {
   onSetDefaultCashierName?: (cashierName: string, applyToCurrent?: boolean) => void;
   defaultStorePhone?: string;
   onSetDefaultStorePhone?: (storePhone: string, applyToCurrent?: boolean) => void;
+  isEcoMode?: boolean;
+  onToggleEcoMode?: () => void;
   onResetAllData: () => void;
   onRestoreBackup: (backupData: {
     history?: Receipt[];
@@ -55,6 +58,7 @@ interface SettingsProps {
     defaultStoreAddress?: string;
     defaultCashierName?: string;
     defaultStorePhone?: string;
+    isEcoMode?: boolean;
   }) => void;
   showToast: (message: string) => void;
 }
@@ -72,6 +76,8 @@ export default function Settings({
   onSetDefaultCashierName,
   defaultStorePhone,
   onSetDefaultStorePhone,
+  isEcoMode,
+  onToggleEcoMode,
   onResetAllData,
   onRestoreBackup,
   showToast,
@@ -182,6 +188,7 @@ export default function Settings({
         defaultStoreAddress: defaultStoreAddress,
         defaultCashierName: defaultCashierName || 'Andi Wijaya',
         defaultStorePhone: defaultStorePhone || '021-7401234',
+        isEcoMode: Boolean(isEcoMode),
       },
       settings: {
         currency: currencySymbol,
@@ -189,7 +196,9 @@ export default function Settings({
         defaultStoreAddress: defaultStoreAddress,
         defaultCashierName: defaultCashierName || 'Andi Wijaya',
         defaultStorePhone: defaultStorePhone || '021-7401234',
+        isEcoMode: Boolean(isEcoMode),
       },
+      isEcoMode: Boolean(isEcoMode),
       defaultStoreName: defaultStoreName,
       defaultStoreAddress: defaultStoreAddress,
       defaultCashierName: defaultCashierName || 'Andi Wijaya',
@@ -260,11 +269,17 @@ export default function Settings({
         let importedDefaultStoreAddress: string | undefined;
         let importedDefaultCashierName: string | undefined;
         let importedDefaultStorePhone: string | undefined;
+        let importedEcoMode: boolean | undefined;
 
         if (Array.isArray(parsed)) {
           // Legacy array of receipts
           importedHistory = parsed;
         } else if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.settings?.isEcoMode === 'boolean') {
+            importedEcoMode = parsed.settings.isEcoMode;
+          } else if (typeof parsed.isEcoMode === 'boolean') {
+            importedEcoMode = parsed.isEcoMode;
+          }
           // Modern full backup
           if (Array.isArray(parsed.history)) {
             importedHistory = parsed.history;
@@ -310,6 +325,7 @@ export default function Settings({
           defaultStoreAddress: importedDefaultStoreAddress,
           defaultCashierName: importedDefaultCashierName,
           defaultStorePhone: importedDefaultStorePhone,
+          isEcoMode: importedEcoMode,
         });
 
         calculateStorageUsage();
@@ -1100,6 +1116,144 @@ export default function Settings({
                       {(defaultStorePhone || '021-7401234') === sug && ' ✓'}
                     </button>
                   ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* MODE HEMAT TINTA / KERTAS (SUPER COMPACT THERMAL 58MM/80MM) */}
+          <div className="bg-white border border-emerald-200 rounded-2xl p-6 shadow-xs space-y-4" id="section-eco-mode">
+            <div className="flex items-center justify-between pb-3 border-b border-emerald-100 flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Leaf className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5 flex-wrap">
+                    Mode Hemat Tinta / Kertas
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 font-sans flex items-center gap-1">
+                      🌱 Rekomendasi Printer 58mm
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Pangkas konsumsi gulungan kertas thermal bluetooth (58mm/80mm) dan tinta secara signifikan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Main Toggle Switch Button */}
+              <button
+                type="button"
+                onClick={onToggleEcoMode}
+                className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                  isEcoMode ? 'bg-emerald-600 border-emerald-600' : 'bg-slate-200 border-slate-200'
+                }`}
+                role="switch"
+                aria-checked={Boolean(isEcoMode)}
+                id="toggle-eco-mode-btn"
+                title={isEcoMode ? 'Klik untuk nonaktifkan Mode Hemat' : 'Klik untuk aktifkan Mode Hemat'}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    isEcoMode ? 'translate-x-7' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Status Indicator Banner */}
+            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${
+              isEcoMode 
+                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                : 'bg-slate-50 border-slate-200 text-slate-700'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${isEcoMode ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                <div>
+                  <span className="font-bold text-xs">
+                    Status: {isEcoMode ? 'AKTIF (Visual Struk Super Padat)' : 'NONAKTIF (Layout Standar Renggang)'}
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {isEcoMode
+                      ? 'Format struk diubah menjadi super padat (1 baris per item, line-height 1.1, margin 0-2px) untuk menghemat panjang gulungan kertas hingga ~50%.'
+                      : 'Struk menggunakan layout normal dengan baris barang terpisah dan spasi standar.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onToggleEcoMode}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer shadow-2xs border ${
+                  isEcoMode
+                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white border-emerald-800'
+                    : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900'
+                }`}
+                id="btn-action-eco-toggle"
+              >
+                {isEcoMode ? 'Nonaktifkan' : 'Aktifkan Mode Hemat'}
+              </button>
+            </div>
+
+            {/* Feature Details: 6 Optimasi Pintar */}
+            <div className="space-y-2">
+              <span className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                6 Optimasi Otomatis saat Mode Hemat Aktif:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Pangkas Margin & Padding
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Semua margin vertikal (Header, Barang, Subtotal, Footer) dipangkas dari renggang menjadi 0px - 2px.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Line-Height Rapat (1.1)
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Baris teks atas-bawah menempel rapat tanpa celah kosong vertikal yang membuang kertas gulungan.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Baris Barang 1 Baris (Inline)
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Format nama & harga dipadatkan: <code className="bg-white px-1 py-0.2 rounded border font-mono text-[9.5px]">1x OBAT HERBAL 200ML  Rp 18.000</code>.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Format Tanggal Ringkas
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Waktu panjang dipangkas detiknya & tahun singkat (contoh: <code className="bg-white px-1 py-0.2 rounded border font-mono text-[9.5px]">01/10/26 15:07</code>).
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Ukuran Header & Footer 85%
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Teks alamat, slogan toko, dan ucapan terima kasih otomatis dikecilkan font-nya menjadi 85%.
+                  </p>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
+                    <span className="text-emerald-600 font-extrabold">✓</span> Garis Solid Tipis 1px
+                  </div>
+                  <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                    Garis putus-putus tebal digantikan oleh garis solid tipis 1px tanpa memakan spasi baris baru.
+                  </p>
                 </div>
               </div>
             </div>
